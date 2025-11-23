@@ -1,10 +1,3 @@
-//
-//  MockURLProtocol.swift
-//  entrustTests
-//
-//  Created by Prince Ugwuh on 11/22/25.
-//
-
 import Foundation
 
 /// A mock URL protocol for intercepting network requests in tests

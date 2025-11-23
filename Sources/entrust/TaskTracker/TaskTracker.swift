@@ -1,10 +1,3 @@
-//
-//  TaskTracker.swift
-//  entrust
-//
-//  Created by Prince Ugwuh on 11/22/25.
-//
-
 protocol TaskTracker: Sendable {
     func fetchIssue(_ id: String) async throws -> TaskIssue
     func updateIssue(_ id: String, prURL: String) async throws

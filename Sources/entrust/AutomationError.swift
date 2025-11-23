@@ -1,10 +1,3 @@
-//
-//  AutomationError.swift
-//  entrust
-//
-//  Created by Prince Ugwuh on 11/22/25.
-//
-
 import Foundation
 
 enum AutomationError: LocalizedError {
@@ -25,6 +18,7 @@ enum AutomationError: LocalizedError {
     case statusChangeFailed
     case invalidStatus(String, available: [String])
     case noTicketsProvided
+
     // Reminders-specific errors
     case remindersAccessDenied
     case remindersListNotFound(String)

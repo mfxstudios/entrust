@@ -1,10 +1,3 @@
-//
-//  TaskTrackerTests.swift
-//  entrustTests
-//
-//  Created by Prince Ugwuh on 11/22/25.
-//
-
 import Testing
 import Foundation
 @testable import entrust

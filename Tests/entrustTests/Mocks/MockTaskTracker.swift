@@ -1,10 +1,3 @@
-//
-//  MockTaskTracker.swift
-//  entrustTests
-//
-//  Created by Prince Ugwuh on 11/22/25.
-//
-
 import Foundation
 @testable import entrust
 

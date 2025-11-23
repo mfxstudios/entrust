@@ -1,10 +1,3 @@
-//
-//  KeychainKey.swift
-//  entrust
-//
-//  Created by Prince Ugwuh on 11/22/25.
-//
-
 import Foundation
 
 enum KeychainKey: String {

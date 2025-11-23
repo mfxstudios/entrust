@@ -1,10 +1,3 @@
-//
-//  PromptTemplate.swift
-//  entrust
-//
-//  Created by Prince Ugwuh on 11/22/25.
-//
-
 import Foundation
 
 /// Variables that can be substituted in prompt templates
