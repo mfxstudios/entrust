@@ -22,13 +22,13 @@ A CLI tool for automating software development workflows by integrating task tra
 ### Using Mint
 
 ```bash
-mint install <username>/entrust
+mint install mfxstudios/entrust
 ```
 
 ### Using Swift Package Manager
 
 ```bash
-git clone https://github.com/<username>/entrust.git
+git clone https://github.com/mfxstudios/entrust.git
 cd entrust
 swift build -c release
 cp .build/release/entrust /usr/local/bin/
