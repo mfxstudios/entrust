@@ -27,7 +27,7 @@ enum AutomationError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .configurationNotFound:
-            return "Configuration not found. Run 'task-automation setup' first."
+            return "Configuration not found. Run 'entrust setup' first."
         case .invalidTrackerType:
             return "Invalid tracker type. Must be 'jira' or 'linear'."
         case .missingJIRAConfiguration:
@@ -47,7 +47,7 @@ enum AutomationError: LocalizedError {
         case .keychainSaveFailed(let key):
             return "Failed to save \(key) to keychain"
         case .keychainLoadFailed(let key):
-            return "Failed to load \(key) from keychain. Run 'task-automation setup' first."
+            return "Failed to load \(key) from keychain. Run 'entrust setup' first."
         case .keychainDeleteFailed(let key):
             return "Failed to delete \(key) from keychain"
         case .missingGitHubToken:

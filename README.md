@@ -114,7 +114,7 @@ Options:
 
 ### Configuration File
 
-Settings are stored in `~/.task-automation/config.json`:
+Settings are stored in `~/.entrust/config.json`:
 
 ```json
 {

@@ -1,9 +1,9 @@
 import Foundation
 
 enum KeychainKey: String {
-    case jiraToken = "com.task-automation.jira-token"
-    case linearToken = "com.task-automation.linear-token"
-    case githubToken = "com.task-automation.github-token"
+    case jiraToken = "com.entrust.jira-token"
+    case linearToken = "com.entrust.linear-token"
+    case githubToken = "com.entrust.github-token"
 }
 
 enum KeychainManager {

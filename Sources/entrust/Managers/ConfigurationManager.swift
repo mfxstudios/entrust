@@ -65,7 +65,7 @@ struct Configuration: Codable {
 enum ConfigurationManager {
     static var configPath: URL {
         FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".task-automation")
+            .appendingPathComponent(".entrust")
             .appendingPathComponent("config.json")
     }
 

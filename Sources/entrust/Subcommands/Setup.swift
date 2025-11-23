@@ -105,7 +105,7 @@ struct Setup: AsyncParsableCommand {
         }
 
         print("\n✅ Configuration saved successfully!")
-        print("\n💡 Tip: Run 'task-automation setup --show' to view your configuration")
+        print("\n💡 Tip: Run 'entrust setup --show' to view your configuration")
     }
 
     func readInput(_ prompt: String, default defaultValue: String = "") -> String {
