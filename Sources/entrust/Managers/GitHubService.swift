@@ -209,34 +209,53 @@ enum Shell {
     }
 
     @discardableResult
-    static func run(_ args: [String]) async throws -> String {
+    static func run(_ args: [String], streamOutput: Bool = false) async throws -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = args
 
-        let outputPipe = Pipe()
-        let errorPipe = Pipe()
+        if streamOutput {
+            // Stream output directly to stdout/stderr for real-time feedback
+            // Simply inherit parent's stdout/stderr for real-time display
+            process.standardOutput = FileHandle.standardOutput
+            process.standardError = FileHandle.standardError
 
-        process.standardOutput = outputPipe
-        process.standardError = errorPipe
+            try process.run()
+            process.waitUntilExit()
 
-        try process.run()
-        process.waitUntilExit()
+            guard process.terminationStatus == 0 else {
+                throw AutomationError.shellCommandFailed("Command failed with status \(process.terminationStatus)")
+            }
 
-        let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+            // When streaming, we don't capture output, so return empty string
+            // The caller gets real-time feedback instead
+            return ""
+        } else {
+            // Original behavior: capture output without streaming
+            let outputPipe = Pipe()
+            let errorPipe = Pipe()
 
-        guard process.terminationStatus == 0 else {
-            let errorOutput = String(data: errorData, encoding: .utf8) ?? "Unknown error"
-            throw AutomationError.shellCommandFailed(errorOutput)
+            process.standardOutput = outputPipe
+            process.standardError = errorPipe
+
+            try process.run()
+            process.waitUntilExit()
+
+            let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
+            let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+
+            guard process.terminationStatus == 0 else {
+                let errorOutput = String(data: errorData, encoding: .utf8) ?? "Unknown error"
+                throw AutomationError.shellCommandFailed(errorOutput)
+            }
+
+            return String(data: outputData, encoding: .utf8) ?? ""
         }
-
-        return String(data: outputData, encoding: .utf8) ?? ""
     }
 
     /// Run a command in a specific directory using sh -c
     @discardableResult
-    static func runInDirectory(_ directory: String, command: String) async throws -> String {
-        try await run("sh", "-c", "cd '\(directory)' && \(command)")
+    static func runInDirectory(_ directory: String, command: String, streamOutput: Bool = false) async throws -> String {
+        try await run(["sh", "-c", "cd '\(directory)' && \(command)"], streamOutput: streamOutput)
     }
 }

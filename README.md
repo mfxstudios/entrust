@@ -170,9 +170,11 @@ Uses the native macOS Reminders app as a Kanban board:
 # Ensure Claude Code is installed
 claude --version
 
-# Use with entrust
+# Use with entrust (runs in headless mode with -p flag)
 entrust run TASK-123 --ai-agent claude-code
 ```
+
+**Note:** Claude Code runs in headless mode using `claude --verbose -p "prompt"`. This ensures non-interactive execution suitable for automation. See [Claude Code headless documentation](https://code.claude.com/docs/en/headless) for more details.
 
 ### Aider
 
@@ -180,16 +182,23 @@ entrust run TASK-123 --ai-agent claude-code
 # Install Aider
 pip install aider-chat
 
-# Use with entrust
+# Use with entrust (runs with --yes flag for headless mode)
 entrust run TASK-123 --ai-agent aider
 ```
+
+**Note:** Aider runs in headless mode using `aider --yes --message "prompt"`. The `--yes` flag automatically confirms all prompts for non-interactive execution. See [Aider scripting documentation](https://aider.chat/docs/scripting.html) for more details.
 
 ### Cursor
 
 ```bash
-# Use Cursor CLI
+# Install Cursor CLI
+curl https://cursor.com/install -fsSL | bash
+
+# Use with entrust (runs with --headless flag)
 entrust run TASK-123 --ai-agent cursor
 ```
+
+**Note:** Cursor runs in headless mode using `cursor --headless --prompt "prompt"`. This enables non-interactive execution suitable for automation. See [Cursor headless mode documentation](https://cursor.com/docs/cli/headless) for more details.
 
 ### Codex
 
@@ -212,6 +221,8 @@ entrust run TASK-123 --ai-agent gemini
 # Requires: gh extension install github/gh-copilot
 entrust run TASK-123 --ai-agent copilot
 ```
+
+**Note:** GitHub Copilot CLI has limited headless support due to OAuth authentication requirements. It may not work well in fully automated environments without browser access. See [GitHub Copilot CLI documentation](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/use-copilot-cli) for more details.
 
 ## Workflow
 

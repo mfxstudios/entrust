@@ -42,6 +42,8 @@ enum PromptStyle: Sendable {
     case promptFlag
     /// Pass prompt directly as argument: `tool <prompt>`
     case directArgument
+    /// Pass prompt via -p flag for headless mode: `tool -p <prompt>`
+    case headlessPrint
 }
 
 /// Protocol for AI coding agents - enables support for different AI CLI tools
@@ -105,7 +107,7 @@ enum AIAgentType: String, Codable, CaseIterable, Sendable {
 
     var promptStyle: PromptStyle {
         switch self {
-        case .claudeCode: return .printFlag
+        case .claudeCode: return .headlessPrint
         case .aider: return .messageFlag
         case .cursor: return .promptFlag
         case .codex: return .directArgument
@@ -116,7 +118,9 @@ enum AIAgentType: String, Codable, CaseIterable, Sendable {
 
     var additionalArgs: [String] {
         switch self {
-        case .aider: return ["--yes"]
+        case .claudeCode: return ["--verbose"]  // Enable verbose logging for debugging
+        case .aider: return ["--yes"]  // Auto-confirm all prompts for headless mode
+        case .cursor: return ["--headless"]  // Enable headless/non-interactive mode
         case .copilot: return ["copilot", "suggest"]
         default: return []
         }
@@ -152,6 +156,13 @@ struct GenericAIAgent: AIAgent, Sendable {
             // Pass prompt directly via --message flag (e.g., aider)
             output = try await executeWithArgs(
                 additionalArgs + ["--message", prompt],
+                context: context
+            )
+
+        case .headlessPrint:
+            // Pass prompt directly via -p flag for headless mode (e.g., claude)
+            output = try await executeWithArgs(
+                additionalArgs + ["-p", prompt],
                 context: context
             )
 
@@ -197,9 +208,9 @@ struct GenericAIAgent: AIAgent, Sendable {
     private func executeWithArgs(_ args: [String], context: AIAgentContext) async throws -> String {
         if let workingDir = context.workingDirectory {
             let fullCommand = ([command] + args).joined(separator: " ")
-            return try await Shell.runInDirectory(workingDir, command: fullCommand)
+            return try await Shell.runInDirectory(workingDir, command: fullCommand, streamOutput: true)
         } else {
-            return try await Shell.run([command] + args)
+            return try await Shell.run([command] + args, streamOutput: true)
         }
     }
 }

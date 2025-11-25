@@ -54,7 +54,7 @@ struct AIAgentTests {
 
         @Test("When accessing prompt styles, Then they are correct for each agent")
         func promptStylesAreCorrect() {
-            #expect(AIAgentType.claudeCode.promptStyle == .printFlag)
+            #expect(AIAgentType.claudeCode.promptStyle == .headlessPrint)
             #expect(AIAgentType.aider.promptStyle == .messageFlag)
             #expect(AIAgentType.cursor.promptStyle == .promptFlag)
             #expect(AIAgentType.codex.promptStyle == .directArgument)
@@ -64,9 +64,9 @@ struct AIAgentTests {
 
         @Test("When accessing additional args, Then agents have correct args")
         func additionalArgsAreCorrect() {
-            #expect(AIAgentType.claudeCode.additionalArgs.isEmpty)
+            #expect(AIAgentType.claudeCode.additionalArgs == ["--verbose"])
             #expect(AIAgentType.aider.additionalArgs == ["--yes"])
-            #expect(AIAgentType.cursor.additionalArgs.isEmpty)
+            #expect(AIAgentType.cursor.additionalArgs == ["--headless"])
             #expect(AIAgentType.codex.additionalArgs.isEmpty)
             #expect(AIAgentType.gemini.additionalArgs.isEmpty)
             #expect(AIAgentType.copilot.additionalArgs == ["copilot", "suggest"])
@@ -170,11 +170,12 @@ struct AIAgentTests {
                 .messageFlag,
                 .printFlag,
                 .promptFlag,
-                .directArgument
+                .directArgument,
+                .headlessPrint
             ]
 
             // Verify we have all expected styles
-            #expect(styles.count == 5)
+            #expect(styles.count == 6)
         }
     }
 
