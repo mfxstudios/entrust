@@ -44,7 +44,7 @@ protocol GitHubServiceProtocol: Sendable {
 
     func createPullRequest(_ params: PullRequestParams) async throws -> PullRequestResult
     func createBranch(name: String, from baseBranch: String, in workingDirectory: String?) async throws
-    func commitAndPush(message: String, branch: String, in workingDirectory: String?) async throws
+    func commitAndPush(message: String, branch: String, in workingDirectory: String?) async throws -> Bool
     func fetchLatest(branch: String, in workingDirectory: String?) async throws
 }
 
@@ -136,12 +136,23 @@ struct GitHubService: GitHubServiceProtocol, Sendable {
         try await Shell.run(gitArgs + ["checkout", "-b", name])
     }
 
-    func commitAndPush(message: String, branch: String, in workingDirectory: String? = nil) async throws {
+    func commitAndPush(message: String, branch: String, in workingDirectory: String? = nil) async throws -> Bool {
         let gitArgs = gitCommand(for: workingDirectory)
 
+        // Stage all changes
         try await Shell.run(gitArgs + ["add", "."])
+
+        // Check if there are any changes to commit
+        let status = try await Shell.run(gitArgs + ["status", "--porcelain"])
+        if status.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            print("⚠️  No changes to commit")
+            return false
+        }
+
+        // Commit and push
         try await Shell.run(gitArgs + ["commit", "-m", message])
         try await Shell.run(gitArgs + ["push", "origin", branch])
+        return true
     }
 
     func fetchLatest(branch: String, in workingDirectory: String? = nil) async throws {

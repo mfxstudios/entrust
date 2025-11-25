@@ -263,11 +263,17 @@ actor ParallelExecutor {
             let sanitizedTicketID = ticketID.sanitizedForBranchName()
             let branch = "feature/\(sanitizedTicketID)"
             let githubService = GitHubService(configuration: githubConfig)
-            try await githubService.commitAndPush(
+            let hasChanges = try await githubService.commitAndPush(
                 message: "[\(ticketID)] Automated implementation",
                 branch: branch,
                 in: worktreePath
             )
+
+            guard hasChanges else {
+                print("[\(ticketID)] ⚠️  No changes were made by the AI agent. Skipping PR creation.")
+                let duration = Date().timeIntervalSince(startTime)
+                return .failure(error: AutomationError.shellCommandFailed("No changes to commit"), duration: duration)
+            }
 
             // Create PR
             print("[\(ticketID)] 📬 Creating pull request...")

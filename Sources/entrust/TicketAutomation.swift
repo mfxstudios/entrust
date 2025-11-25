@@ -82,11 +82,21 @@ struct TicketAutomation: Sendable {
             from: githubService.configuration.baseBranch,
             in: nil
         )
-        try await githubService.commitAndPush(
+
+        let hasChanges = try await githubService.commitAndPush(
             message: "[\(ticketID)] Automated implementation",
             branch: branch,
             in: nil
         )
+
+        guard hasChanges else {
+            print("\n⚠️  No changes were made by the AI agent. Aborting PR creation.")
+            print("   This could mean:")
+            print("   - The AI agent didn't make any code changes")
+            print("   - The task might already be completed")
+            print("   - There was an issue with the AI agent execution")
+            return
+        }
 
         print("\n📬 Creating pull request...")
         let prResult = try await githubService.createPullRequest(
