@@ -209,10 +209,15 @@ enum Shell {
     }
 
     @discardableResult
-    static func run(_ args: [String], streamOutput: Bool = false) async throws -> String {
+    static func run(_ args: [String], streamOutput: Bool = false, workingDirectory: String? = nil) async throws -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = args
+
+        // Set working directory if provided
+        if let workingDirectory = workingDirectory {
+            process.currentDirectoryURL = URL(fileURLWithPath: workingDirectory)
+        }
 
         if streamOutput {
             // Stream output directly to stdout/stderr for real-time feedback
@@ -253,9 +258,25 @@ enum Shell {
         }
     }
 
-    /// Run a command in a specific directory using sh -c
+    /// Run a command in a specific directory
     @discardableResult
     static func runInDirectory(_ directory: String, command: String, streamOutput: Bool = false) async throws -> String {
-        try await run(["sh", "-c", "cd '\(directory)' && \(command)"], streamOutput: streamOutput)
+        // Parse command string into command and args
+        // This is a simple split - for complex commands with quotes, use the array version
+        let components = command.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
+        guard !components.isEmpty else {
+            throw AutomationError.shellCommandFailed("Empty command")
+        }
+
+        let cmd = String(components[0])
+        let args = components.count > 1 ? [String(components[1])] : []
+
+        return try await run([cmd] + args, streamOutput: streamOutput, workingDirectory: directory)
+    }
+
+    /// Run a command with args in a specific directory
+    @discardableResult
+    static func runInDirectory(_ directory: String, args: [String], streamOutput: Bool = false) async throws -> String {
+        try await run(args, streamOutput: streamOutput, workingDirectory: directory)
     }
 }

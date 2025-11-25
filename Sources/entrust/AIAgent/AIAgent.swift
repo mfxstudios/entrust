@@ -207,8 +207,7 @@ struct GenericAIAgent: AIAgent, Sendable {
 
     private func executeWithArgs(_ args: [String], context: AIAgentContext) async throws -> String {
         if let workingDir = context.workingDirectory {
-            let fullCommand = ([command] + args).joined(separator: " ")
-            return try await Shell.runInDirectory(workingDir, command: fullCommand, streamOutput: true)
+            return try await Shell.runInDirectory(workingDir, args: [command] + args, streamOutput: true)
         } else {
             return try await Shell.run([command] + args, streamOutput: true)
         }
