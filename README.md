@@ -79,7 +79,7 @@ entrust setup --clear  # Clear all stored configuration
 
 ### `run`
 
-Process a single task from your tracker.
+Process a single task from your tracker. This command uses git worktrees for isolated execution, ensuring the AI agent works in a clean environment without affecting your main working directory.
 
 ```bash
 entrust run <task-id> [options]
@@ -89,17 +89,19 @@ Options:
   --base-branch <branch>  Override default base branch (default: main)
   --draft                 Create PR as draft
   --skip-tests            Skip running tests
-  --ai-agent <agent>      AI agent to use (claude-code, aider, cursor, custom)
-  --custom-command <cmd>  Custom AI CLI command (when using --ai-agent custom)
-  --context <text>        Additional context for the AI agent
+  --ai-agent <agent>      AI agent to use (claude-code, aider, cursor, codex, gemini, copilot)
+  --keep-worktree         Keep worktree after completion (for debugging)
+  --dry-run               Show execution plan without running
 ```
 
 ### `parallel`
 
-Process multiple tasks concurrently.
+Process multiple tasks concurrently. Each task runs in its own git worktree for complete isolation and true parallel execution.
 
 ```bash
 entrust parallel <task-ids>... [options]
+# Or read from file:
+entrust parallel --file tasks.txt [options]
 
 Options:
   --max-concurrent <n>    Maximum concurrent tasks (default: 3)
@@ -107,7 +109,9 @@ Options:
   --base-branch <branch>  Override default base branch
   --draft                 Create PRs as drafts
   --skip-tests            Skip running tests
-  --ai-agent <agent>      AI agent to use
+  --ai-agent <agent>      AI agent to use (claude-code, aider, cursor, codex, gemini, copilot)
+  --keep-worktrees        Keep worktrees after completion (for debugging)
+  --dry-run               Show execution plan without running
 ```
 
 ## Configuration
@@ -214,13 +218,31 @@ entrust run TASK-123 --ai-agent copilot
 When you run `entrust run TASK-123`, the tool:
 
 1. **Fetches** the task from your configured tracker
-2. **Creates** a new git branch (e.g., `feature/TASK-123-implement-login`)
-3. **Generates** a prompt from the task details
-4. **Invokes** the AI agent with the prompt
-5. **Runs** tests (unless `--skip-tests`)
-6. **Commits** changes with a descriptive message
-7. **Creates** a pull request on GitHub
-8. **Updates** the task status and adds the PR link
+2. **Creates** a git worktree in `/tmp/entrust-<ticket-id>-<uuid>`
+3. **Creates** a new git branch in the worktree (e.g., `feature/TASK-123-implement-login`)
+4. **Generates** a prompt from the task details
+5. **Invokes** the AI agent with the prompt in the isolated worktree
+6. **Runs** tests in the worktree (unless `--skip-tests`)
+7. **Commits** changes with a descriptive message
+8. **Pushes** the branch to GitHub
+9. **Creates** a pull request on GitHub
+10. **Updates** the task status and adds the PR link
+11. **Cleans up** the worktree (unless `--keep-worktree`)
+
+### Why Worktrees?
+
+Git worktrees provide complete isolation:
+- **No conflicts** with your current working directory
+- **Parallel execution** without interference (especially for `parallel` command)
+- **Clean state** - AI agent starts with a fresh checkout
+- **Safe experimentation** - your main workspace remains untouched
+
+If you need to inspect the worktree for debugging, use `--keep-worktree` flag. The path will be shown in the output, and you can manually clean it up with:
+
+```bash
+git worktree prune
+rm -rf /tmp/entrust-*
+```
 
 ## Development
 

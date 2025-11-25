@@ -36,6 +36,9 @@ struct Run: AsyncParsableCommand {
     @Flag(name: .long, help: "Dry run - show what would be done without executing")
     var dryRun: Bool = false
 
+    @Flag(name: .long, help: "Keep worktree after completion (for debugging)")
+    var keepWorktree: Bool = false
+
     func run() async throws {
         let config = try ConfigurationManager.load()
 
@@ -84,9 +87,14 @@ struct Run: AsyncParsableCommand {
             print("Use GitHub CLI: \(effectiveUseGHCLI)")
             print("Skip Tests:     \(effectiveSkipTests)")
             print("Draft PR:       \(effectiveDraft)")
+            print("Keep Worktree:  \(keepWorktree)")
             print("\n✅ Configuration valid. Run without --dry-run to execute.")
             return
         }
+
+        // Get current repo root
+        let repoRoot = try await Shell.run("git", "rev-parse", "--show-toplevel")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
 
         // Create GitHub service
         let githubConfig = GitHubConfiguration(
@@ -100,11 +108,13 @@ struct Run: AsyncParsableCommand {
 
         let automation = TicketAutomation(
             ticketID: ticketID,
+            repoRoot: repoRoot,
             taskTracker: taskTracker,
             githubService: githubService,
             aiAgent: agent,
             skipTests: effectiveSkipTests,
-            draft: effectiveDraft
+            draft: effectiveDraft,
+            keepWorktree: keepWorktree
         )
 
         try await automation.execute()
