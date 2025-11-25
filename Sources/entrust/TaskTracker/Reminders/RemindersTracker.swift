@@ -21,6 +21,9 @@ struct RemindersTracker: TaskTracker, @unchecked Sendable {
 
     var baseURL: String { "reminders:///" }
 
+    // Marker to track section in notes
+    private let sectionMarker = "[Section:"
+
     init(listName: String) {
         self.eventStore = EKEventStore()
         self.listName = listName
@@ -41,6 +44,42 @@ struct RemindersTracker: TaskTracker, @unchecked Sendable {
             throw AutomationError.remindersListNotFound(listName)
         }
         return calendar
+    }
+
+    /// Extract section from notes
+    private func extractSection(from notes: String?) -> String? {
+        guard let notes = notes else { return nil }
+        guard let range = notes.range(of: "\(sectionMarker) ") else { return nil }
+
+        let startIndex = range.upperBound
+        guard let endRange = notes[startIndex...].range(of: "]") else { return nil }
+
+        return String(notes[startIndex..<endRange.lowerBound])
+    }
+
+    /// Update notes with new section
+    private func updateNotesWithSection(_ notes: String?, section: String) -> String {
+        // Remove existing section marker if present
+        var cleanNotes = notes ?? ""
+        if let range = cleanNotes.range(of: "\(sectionMarker) .*?\\]", options: .regularExpression) {
+            cleanNotes.removeSubrange(range)
+            cleanNotes = cleanNotes.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        // Add new section at the beginning
+        let sectionLine = "\(sectionMarker) \(section)]"
+        return cleanNotes.isEmpty ? sectionLine : "\(sectionLine)\n\(cleanNotes)"
+    }
+
+    /// Get notes without section marker for display
+    private func cleanNotes(_ notes: String?) -> String? {
+        guard let notes = notes else { return nil }
+        var cleaned = notes
+        if let range = cleaned.range(of: "\(sectionMarker) .*?\\]", options: .regularExpression) {
+            cleaned.removeSubrange(range)
+            cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return cleaned.isEmpty ? nil : cleaned
     }
 
     /// Fetch reminders and extract Sendable data
@@ -100,7 +139,7 @@ struct RemindersTracker: TaskTracker, @unchecked Sendable {
         return TaskIssue(
             id: data.title ?? id,
             title: data.title ?? "Untitled",
-            description: data.notes
+            description: cleanNotes(data.notes)
         )
     }
 
@@ -109,27 +148,47 @@ struct RemindersTracker: TaskTracker, @unchecked Sendable {
 
         let reminder = try findReminder(byTitle: id)
 
-        // Append PR URL to notes
-        let existingNotes = reminder.notes ?? ""
-        let separator = existingNotes.isEmpty ? "" : "\n\n"
-        reminder.notes = "\(existingNotes)\(separator)🤖 Automated PR: \(prURL)"
+        // Get clean notes (without section marker) and append PR URL
+        let cleanedNotes = cleanNotes(reminder.notes) ?? ""
+        let separator = cleanedNotes.isEmpty ? "" : "\n\n"
+        let newNotes = "\(cleanedNotes)\(separator)🤖 Automated PR: \(prURL)"
+
+        // Preserve section if it exists
+        if let section = extractSection(from: reminder.notes) {
+            reminder.notes = updateNotesWithSection(newNotes, section: section)
+        } else {
+            reminder.notes = newNotes
+        }
 
         try eventStore.save(reminder, commit: true)
     }
 
     func getAvailableStatuses(_ id: String) async throws -> [IssueStatus] {
-        // Reminders doesn't have built-in statuses like Kanban boards,
-        // but we can use lists as pseudo-statuses for the column view.
-        // Return common workflow statuses that map to reminder states.
+        // Extract sections from all reminders in the configured list
         try await requestAccess()
 
-        let calendars = eventStore.calendars(for: .reminder)
+        let calendar = try findList()
+        let predicate = eventStore.predicateForReminders(in: [calendar])
+        let reminderDataList = try await fetchReminderData(matching: predicate)
 
-        // Return all reminder lists as possible "statuses" (columns)
-        return calendars.map { calendar in
+        // Extract unique section names from notes
+        let sections = Set(reminderDataList.compactMap { extractSection(from: $0.notes) })
+            .sorted()
+
+        // If no sections found, return common defaults
+        if sections.isEmpty {
+            return [
+                IssueStatus(id: "backlog", name: "Backlog", description: nil),
+                IssueStatus(id: "in-progress", name: "In Progress", description: nil),
+                IssueStatus(id: "in-review", name: "In Review", description: nil),
+                IssueStatus(id: "done", name: "Done", description: nil)
+            ]
+        }
+
+        return sections.map { section in
             IssueStatus(
-                id: calendar.calendarIdentifier,
-                name: calendar.title,
+                id: section.lowercased().replacingOccurrences(of: " ", with: "-"),
+                name: section,
                 description: nil
             )
         }
@@ -138,22 +197,28 @@ struct RemindersTracker: TaskTracker, @unchecked Sendable {
     func changeStatus(_ id: String, to status: String) async throws {
         try await requestAccess()
 
-        // Find the target list (status = list name)
-        let calendars = eventStore.calendars(for: .reminder)
-        guard let targetCalendar = calendars.first(where: {
-            $0.title.lowercased() == status.lowercased()
-        }) else {
-            throw AutomationError.invalidStatus(
-                status,
-                available: calendars.map { $0.title }
-            )
+        let calendar = try findList()
+        let predicate = eventStore.predicateForReminders(in: [calendar])
+        let reminderDataList = try await fetchReminderData(matching: predicate)
+
+        // Get available sections
+        let sections = Set(reminderDataList.compactMap { extractSection(from: $0.notes) })
+
+        // Find matching section (case-insensitive) or use the provided status as-is
+        let targetSection: String
+        if let match = sections.first(where: { $0.lowercased() == status.lowercased() }) {
+            targetSection = match
+        } else {
+            // If section doesn't exist yet, create it with the provided name
+            targetSection = status
         }
 
         // Find the reminder
         let reminder = try findReminder(byTitle: id)
 
-        // Move to new list by changing calendar
-        reminder.calendar = targetCalendar
+        // Update notes with new section
+        let cleanedNotes = cleanNotes(reminder.notes) ?? ""
+        reminder.notes = updateNotesWithSection(cleanedNotes, section: targetSection)
 
         try eventStore.save(reminder, commit: true)
     }
@@ -175,7 +240,7 @@ struct RemindersTracker: TaskTracker, @unchecked Sendable {
             TaskIssue(
                 id: data.title ?? "Untitled",
                 title: data.title ?? "Untitled",
-                description: data.notes
+                description: cleanNotes(data.notes)
             )
         }
     }
@@ -192,14 +257,21 @@ struct RemindersTracker: TaskTracker, @unchecked Sendable {
     }
 
     /// Create a new reminder in the configured list
-    func createReminder(title: String, notes: String?, dueDate: Date? = nil) async throws -> String {
+    func createReminder(title: String, notes: String?, dueDate: Date? = nil, section: String? = nil) async throws -> String {
         try await requestAccess()
 
         let calendar = try findList()
 
         let reminder = EKReminder(eventStore: eventStore)
         reminder.title = title
-        reminder.notes = notes
+
+        // Add section to notes if provided
+        if let section = section {
+            reminder.notes = updateNotesWithSection(notes, section: section)
+        } else {
+            reminder.notes = notes
+        }
+
         reminder.calendar = calendar
 
         if let dueDate = dueDate {
