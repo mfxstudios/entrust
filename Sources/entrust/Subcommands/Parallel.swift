@@ -236,7 +236,13 @@ actor ParallelExecutor {
 
             // Change status to "In Progress"
             print("[\(ticketID)] 🔄 Moving to 'In Progress'...")
-            try? await taskTracker.changeStatus(ticketID, to: "In Progress")
+            do {
+                try await taskTracker.changeStatus(ticketID, to: "In Progress")
+            } catch AutomationError.invalidStatus(let requested, let available) {
+                print("[\(ticketID)] ⚠️  Warning: Could not move to '\(requested)'. Available: \(available.joined(separator: ", "))")
+            } catch {
+                print("[\(ticketID)] ⚠️  Warning: Could not change status: \(error.localizedDescription)")
+            }
 
             // Run AI agent in worktree
             print("[\(ticketID)] 🤖 Running \(aiAgent.name)...")
@@ -254,7 +260,8 @@ actor ParallelExecutor {
 
             // Commit and push using GitHub service
             print("[\(ticketID)] 🌿 Committing and pushing...")
-            let branch = "feature/\(ticketID)"
+            let sanitizedTicketID = ticketID.sanitizedForBranchName()
+            let branch = "feature/\(sanitizedTicketID)"
             let githubService = GitHubService(configuration: githubConfig)
             try await githubService.commitAndPush(
                 message: "[\(ticketID)] Automated implementation",
@@ -280,7 +287,13 @@ actor ParallelExecutor {
 
             // Change status to "In Review"
             print("[\(ticketID)] 🔄 Moving to 'In Review'...")
-            try? await taskTracker.changeStatus(ticketID, to: "In Review")
+            do {
+                try await taskTracker.changeStatus(ticketID, to: "In Review")
+            } catch AutomationError.invalidStatus(let requested, let available) {
+                print("[\(ticketID)] ⚠️  Warning: Could not move to '\(requested)'. Available: \(available.joined(separator: ", "))")
+            } catch {
+                print("[\(ticketID)] ⚠️  Warning: Could not change status: \(error.localizedDescription)")
+            }
 
             let duration = Date().timeIntervalSince(startTime)
             print("[\(ticketID)] ✅ Completed in \(Int(duration))s - \(prResult.url)")
@@ -295,8 +308,9 @@ actor ParallelExecutor {
     }
 
     func createWorktree(for ticketID: String) async throws -> String {
-        let worktreePath = "/tmp/entrust-\(ticketID)-\(UUID().uuidString.prefix(8))"
-        let branch = "feature/\(ticketID)"
+        let sanitizedTicketID = ticketID.sanitizedForBranchName()
+        let worktreePath = "/tmp/entrust-\(sanitizedTicketID)-\(UUID().uuidString.prefix(8))"
+        let branch = "feature/\(sanitizedTicketID)"
 
         let githubService = GitHubService(configuration: githubConfig)
         try await githubService.createWorktree(

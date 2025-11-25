@@ -54,7 +54,13 @@ struct TicketAutomation: Sendable {
         print("\n📋 Task: \(issue.title)")
 
         print("\n🔄 Moving ticket to 'In Progress'...")
-        try? await taskTracker.changeStatus(ticketID, to: "In Progress")
+        do {
+            try await taskTracker.changeStatus(ticketID, to: "In Progress")
+        } catch AutomationError.invalidStatus(let requested, let available) {
+            print("⚠️  Warning: Could not move to '\(requested)'. Available statuses: \(available.joined(separator: ", "))")
+        } catch {
+            print("⚠️  Warning: Could not change status: \(error.localizedDescription)")
+        }
 
         print("\n🤖 Running \(aiAgent.name)...")
         let prompt = buildPrompt(for: issue)
@@ -69,7 +75,8 @@ struct TicketAutomation: Sendable {
         }
 
         print("\n🌿 Creating branch and pushing changes...")
-        let branch = "feature/\(ticketID)"
+        let sanitizedTicketID = ticketID.sanitizedForBranchName()
+        let branch = "feature/\(sanitizedTicketID)"
         try await githubService.createBranch(
             name: branch,
             from: githubService.configuration.baseBranch,
@@ -96,7 +103,13 @@ struct TicketAutomation: Sendable {
         try await taskTracker.updateIssue(ticketID, prURL: prResult.url)
 
         print("\n🔄 Moving ticket to 'In Review'...")
-        try? await taskTracker.changeStatus(ticketID, to: "In Review")
+        do {
+            try await taskTracker.changeStatus(ticketID, to: "In Review")
+        } catch AutomationError.invalidStatus(let requested, let available) {
+            print("⚠️  Warning: Could not move to '\(requested)'. Available statuses: \(available.joined(separator: ", "))")
+        } catch {
+            print("⚠️  Warning: Could not change status: \(error.localizedDescription)")
+        }
 
         print("\n🎉 Done! PR created: \(prResult.url)")
     }
