@@ -189,7 +189,23 @@ struct TicketAutomation: Sendable {
         - Add comments where logic isn't self-evident
         - Ensure the code compiles without errors
 
-        When you're done, please confirm the implementation is complete.
+        ## Pull Request Summary
+        After completing the implementation, provide a summary for the pull request in the following format:
+
+        **CONTEXT:**
+        Explain the context and WHY this change is being made from a product perspective. What problem does this solve? What is the business value?
+
+        **DESCRIPTION:**
+        Provide a detailed technical description of HOW this task was accomplished. What specific steps were taken? Include details about implementation approach, architecture decisions, and integration points.
+
+        **CHANGES:**
+        List the specific technical changes made to the codebase:
+        - What files were added/modified
+        - What functionality was added or changed
+        - Any refactoring or improvements made
+        - Key implementation details
+
+        When you're done, please confirm the implementation is complete and provide the PR summary.
         """
     }
 
@@ -241,17 +257,63 @@ struct TicketAutomation: Sendable {
     }
 
     func buildPRBody(issue: TaskIssue, agentOutput: String) -> String {
-        """
+        // Try to extract sections from Claude's output
+        let context = extractSection(from: agentOutput, sectionName: "CONTEXT") ?? "Implements \(issue.title)"
+        let description = extractSection(from: agentOutput, sectionName: "DESCRIPTION") ?? (issue.description ?? "No description provided")
+        let changes = extractSection(from: agentOutput, sectionName: "CHANGES") ?? "See commit history for detailed changes"
+
+        return """
         Resolves [\(issue.id)](\(taskTracker.baseURL)/issue/\(issue.id))
 
-        ## Summary
-        \(issue.title)
+        ## Context
+        \(context)
 
         ## Description
-        \(issue.description ?? "")
+        \(description)
+
+        ## Changes in the codebase
+        \(changes)
 
         ---
         🤖 Automated by entrust using Claude Code
         """
+    }
+
+    private func extractSection(from text: String, sectionName: String) -> String? {
+        // Look for **SECTIONNAME:** or **SECTIONNAME**
+        let patterns = [
+            "\\*\\*\(sectionName):\\*\\*",
+            "\\*\\*\(sectionName)\\*\\*"
+        ]
+
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+                continue
+            }
+
+            let nsText = text as NSString
+            let matches = regex.matches(in: text, range: NSRange(location: 0, length: nsText.length))
+
+            if let match = matches.first {
+                let startIndex = match.range.location + match.range.length
+
+                // Find the next section or end of text
+                let remainingText = String(nsText.substring(from: startIndex))
+
+                // Look for next section marker or end
+                let nextSectionPattern = "\\*\\*[A-Z]+:?\\*\\*"
+                if let nextRegex = try? NSRegularExpression(pattern: nextSectionPattern, options: []),
+                   let nextMatch = nextRegex.firstMatch(in: remainingText, range: NSRange(location: 0, length: (remainingText as NSString).length)) {
+                    let endIndex = nextMatch.range.location
+                    let section = (remainingText as NSString).substring(to: endIndex)
+                    return section.trimmingCharacters(in: .whitespacesAndNewlines)
+                } else {
+                    // No next section, take rest of text
+                    return remainingText.trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+            }
+        }
+
+        return nil
     }
 }
