@@ -8,6 +8,7 @@ struct TicketAutomation: Sendable {
     let aiAgent: any AIAgent
     let skipTests: Bool
     let draft: Bool
+    let maxRetryAttempts: Int
 
     init(
         ticketID: String,
@@ -16,7 +17,8 @@ struct TicketAutomation: Sendable {
         githubService: GitHubService,
         aiAgent: any AIAgent,
         skipTests: Bool = false,
-        draft: Bool = false
+        draft: Bool = false,
+        maxRetryAttempts: Int = 3
     ) {
         self.ticketID = ticketID
         self.repoRoot = repoRoot
@@ -25,6 +27,7 @@ struct TicketAutomation: Sendable {
         self.aiAgent = aiAgent
         self.skipTests = skipTests
         self.draft = draft
+        self.maxRetryAttempts = maxRetryAttempts
     }
 
     func execute() async throws {
@@ -68,7 +71,7 @@ struct TicketAutomation: Sendable {
 
         // Run Claude Code in worktree
         print("\n🤖 Running Claude Code in worktree: \(worktreePath)\n")
-        let agentResult = try await aiAgent.execute(
+        var agentResult = try await aiAgent.execute(
             prompt: prompt,
             context: AIAgentContext(workingDirectory: worktreePath)
         )
@@ -83,10 +86,52 @@ struct TicketAutomation: Sendable {
             print("⚠️  No files were modified by Claude Code")
         }
 
-        // Run tests if needed
+        // Run tests if needed with automatic retry on failure
         if !skipTests {
             print("\n\n🧪 Running tests in worktree...")
-            try await runTests(in: worktreePath)
+
+            var attempt = 0
+
+            while attempt < maxRetryAttempts {
+                do {
+                    try await runTests(in: worktreePath)
+                    if attempt > 0 {
+                        print("✅ Tests passed after \(attempt) fix attempt(s)!")
+                    }
+                    break // Tests passed, exit loop
+                } catch {
+                    attempt += 1
+
+                    // Tests failed - try to fix automatically using multi-turn
+                    if let sessionId = agentResult.sessionId, attempt < maxRetryAttempts {
+                        print("\n⚠️  Tests failed (attempt \(attempt)/\(maxRetryAttempts)): \(error.localizedDescription)")
+                        print("🔄 Asking Claude to fix the test failures...\n")
+
+                        let fixPrompt = """
+                        The tests failed with the following error:
+                        \(error.localizedDescription)
+
+                        Please fix the code to make the tests pass. Review what you implemented and correct any issues.
+                        \(attempt > 1 ? "This is attempt \(attempt), please look more carefully at the error." : "")
+                        """
+
+                        agentResult = try await aiAgent.continueConversation(
+                            sessionId: sessionId,
+                            prompt: fixPrompt,
+                            context: AIAgentContext(workingDirectory: worktreePath)
+                        )
+
+                        print("\n🧪 Running tests again (attempt \(attempt + 1))...")
+                    } else if attempt >= maxRetryAttempts {
+                        print("\n❌ Tests failed after \(maxRetryAttempts) attempts")
+                        throw error
+                    } else {
+                        // No session ID, can't continue conversation
+                        print("\n❌ Tests failed and cannot auto-fix (no session ID)")
+                        throw error
+                    }
+                }
+            }
         }
 
         // Commit and push

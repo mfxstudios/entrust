@@ -239,15 +239,46 @@ actor ParallelExecutor {
             let sanitizedTicketID = ticketID.sanitizedForBranchName()
             let branch = "feature/\(sanitizedTicketID)"
 
-            let agentResult = try await aiAgent.execute(
+            var agentResult = try await aiAgent.execute(
                 prompt: prompt,
                 context: AIAgentContext(workingDirectory: worktreePath)
             )
 
-            // Run tests
+            // Run tests with automatic retry on failure
             if !skipTests {
                 print("[\(ticketID)] 🧪 Running tests in worktree...")
-                try await runTests(in: worktreePath)
+
+                do {
+                    try await runTests(in: worktreePath)
+                } catch {
+                    // Tests failed - try to fix automatically using multi-turn
+                    if let sessionId = agentResult.sessionId {
+                        print("[\(ticketID)] ⚠️  Tests failed: \(error.localizedDescription)")
+                        print("[\(ticketID)] 🔄 Asking Claude to fix the test failures...")
+
+                        let fixPrompt = """
+                        The tests failed with the following error:
+                        \(error.localizedDescription)
+
+                        Please fix the code to make the tests pass. Review what you implemented and correct any issues.
+                        """
+
+                        agentResult = try await aiAgent.continueConversation(
+                            sessionId: sessionId,
+                            prompt: fixPrompt,
+                            context: AIAgentContext(workingDirectory: worktreePath)
+                        )
+
+                        // Try tests again after fix
+                        print("[\(ticketID)] 🧪 Running tests again after fixes...")
+                        try await runTests(in: worktreePath)
+                        print("[\(ticketID)] ✅ Tests passed after automatic fix!")
+                    } else {
+                        // No session ID, can't continue conversation
+                        print("[\(ticketID)] ❌ Tests failed and cannot auto-fix (no session ID)")
+                        throw error
+                    }
+                }
             }
 
             // Commit and push using GitHub service

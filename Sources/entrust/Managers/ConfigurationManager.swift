@@ -17,6 +17,7 @@ struct Configuration: Codable {
 
     // Execution settings
     let runTestsByDefault: Bool
+    let maxRetryAttempts: Int
 
     // Coding guidelines for custom init with defaults
     init(
@@ -28,7 +29,8 @@ struct Configuration: Codable {
         useGHCLI: Bool,
         autoCreateDraft: Bool,
         aiAgentType: String? = "claude-code",
-        runTestsByDefault: Bool
+        runTestsByDefault: Bool,
+        maxRetryAttempts: Int = 3
     ) {
         self.trackerType = trackerType
         self.jiraURL = jiraURL
@@ -39,6 +41,7 @@ struct Configuration: Codable {
         self.autoCreateDraft = autoCreateDraft
         self.aiAgentType = aiAgentType
         self.runTestsByDefault = runTestsByDefault
+        self.maxRetryAttempts = maxRetryAttempts
     }
 
     /// Get the configured AI agent
@@ -109,6 +112,7 @@ enum ConfigurationManager {
 
         lines.append("# Execution Settings")
         lines.append("RUN_TESTS_BY_DEFAULT=\(config.runTestsByDefault)")
+        lines.append("MAX_RETRY_ATTEMPTS=\(config.maxRetryAttempts)")
 
         let content = lines.joined(separator: "\n") + "\n"
         try content.write(to: configPath, atomically: true, encoding: .utf8)
@@ -153,6 +157,7 @@ enum ConfigurationManager {
         let useGHCLI = env["USE_GH_CLI"]?.lowercased() == "true"
         let autoCreateDraft = env["AUTO_CREATE_DRAFT"]?.lowercased() == "true"
         let runTestsByDefault = env["RUN_TESTS_BY_DEFAULT"]?.lowercased() == "true"
+        let maxRetryAttempts = Int(env["MAX_RETRY_ATTEMPTS"] ?? "3") ?? 3
 
         return Configuration(
             trackerType: trackerType,
@@ -163,7 +168,8 @@ enum ConfigurationManager {
             useGHCLI: useGHCLI,
             autoCreateDraft: autoCreateDraft,
             aiAgentType: env["AI_AGENT_TYPE"],
-            runTestsByDefault: runTestsByDefault
+            runTestsByDefault: runTestsByDefault,
+            maxRetryAttempts: maxRetryAttempts
         )
     }
 

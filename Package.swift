@@ -11,12 +11,14 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.2.0"),
+        .package(url: "https://github.com/jamesrochabrun/ClaudeCodeSDK.git", from: "1.2.3"),
     ],
     targets: [
         .executableTarget(
             name: "entrust",
             dependencies: [
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
+                .product(name: "ClaudeCodeSDK", package: "ClaudeCodeSDK"),
             ]
         ),
         .testTarget(

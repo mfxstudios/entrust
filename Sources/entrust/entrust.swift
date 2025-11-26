@@ -7,7 +7,14 @@ struct Entrust: AsyncParsableCommand {
         commandName: "entrust",
         abstract: "Automate iOS development from JIRA/Linear to PR using Claude Code",
         version: "0.1.0",
-        subcommands: [Setup.self, Run.self, Parallel.self, Status.self],
+        subcommands: [
+            Setup.self,
+            Run.self,
+            Parallel.self,
+            Continue.self,
+            Sessions.self,
+            Status.self
+        ],
         defaultSubcommand: Run.self
     )
 }

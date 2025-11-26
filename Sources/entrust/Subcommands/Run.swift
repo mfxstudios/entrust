@@ -105,7 +105,8 @@ struct Run: AsyncParsableCommand {
             githubService: githubService,
             aiAgent: agent,
             skipTests: effectiveSkipTests,
-            draft: effectiveDraft
+            draft: effectiveDraft,
+            maxRetryAttempts: config.maxRetryAttempts
         )
 
         try await automation.execute()
