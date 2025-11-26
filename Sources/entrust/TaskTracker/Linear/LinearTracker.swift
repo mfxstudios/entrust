@@ -3,41 +3,57 @@ import Foundation
 struct LinearTracker: TaskTracker {
     let token: String
 
-    var baseURL: String { "https://linear.app" }
+    var baseURL: String { "https://api.linear.app" }
 
     func fetchIssue(_ id: String) async throws -> TaskIssue {
-        let query = """
-        query Issue($id: String!) {
-            issue(id: $id) {
-                id
-                identifier
-                title
-                description
-            }
-        }
-        """
+        let query = "query Issue($id: String!) { issue(id: $id) { id identifier title description }}"
 
         let payload: [String: Any] = [
             "query": query,
             "variables": ["id": id]
         ]
 
-        var request = URLRequest(url: URL(string: "https://api.linear.app/graphql")!)
+        var request = URLRequest(url: URL(string: "\(baseURL)/graphql")!)
         request.httpMethod = "POST"
         request.setValue(token, forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
+        print("🔍 Linear API: Fetching issue '\(id)'...")
+
         let (data, response) = try await URLSession.shared.data(for: request)
 
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
+        guard let httpResponse = response as? HTTPURLResponse else {
+            print("❌ Invalid HTTP response")
             throw AutomationError.issueFetchFailed
+        }
+
+        print("📡 Linear API Response: HTTP \(httpResponse.statusCode)")
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            print("❌ HTTP Error \(httpResponse.statusCode)")
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("Response body: \(responseString)")
+            }
+            throw AutomationError.issueFetchFailed
+        }
+
+        // Print response for debugging
+        if let responseString = String(data: data, encoding: .utf8) {
+            print("📄 Response: \(responseString)")
         }
 
         let linearResponse = try JSONDecoder().decode(LinearResponse.self, from: data)
 
-        guard let issue = linearResponse.data.issue else {
+        // Check for GraphQL errors
+        if let errors = linearResponse.errors, !errors.isEmpty {
+            let errorMessage = errors.map { $0.message }.joined(separator: ", ")
+            print("❌ Linear API Error: \(errorMessage)")
+            throw AutomationError.issueFetchFailed
+        }
+
+        guard let data = linearResponse.data, let issue = data.issue else {
+            print("❌ No issue data in response")
             throw AutomationError.issueNotFound
         }
 
@@ -116,7 +132,14 @@ struct LinearTracker: TaskTracker {
 
             let statesResponse = try JSONDecoder().decode(LinearStatesResponse.self, from: data)
 
-            guard let states = statesResponse.data.issue?.team.states.nodes else {
+            // Check for GraphQL errors
+            if let errors = statesResponse.errors, !errors.isEmpty {
+                let errorMessage = errors.map { $0.message }.joined(separator: ", ")
+                print("❌ Linear API Error: \(errorMessage)")
+                throw AutomationError.statusFetchFailed
+            }
+
+            guard let data = statesResponse.data, let states = data.issue?.team.states.nodes else {
                 throw AutomationError.issueNotFound
             }
 

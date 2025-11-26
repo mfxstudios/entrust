@@ -1,9 +1,24 @@
 struct LinearResponse: Codable {
-    let data: LinearData
+    let data: LinearData?
+    let errors: [LinearError]?
+}
+
+struct LinearError: Codable {
+    let message: String
+    let extensions: LinearErrorExtensions?
+}
+
+struct LinearErrorExtensions: Codable {
+    let code: String?
 }
 
 struct LinearData: Codable {
     let issue: LinearIssue?
+    let issues: LinearIssuesConnection?
+}
+
+struct LinearIssuesConnection: Codable {
+    let nodes: [LinearIssue]
 }
 
 struct LinearIssue: Codable {
@@ -14,7 +29,8 @@ struct LinearIssue: Codable {
 }
 
 struct LinearStatesResponse: Codable {
-    let data: LinearStatesData
+    let data: LinearStatesData?
+    let errors: [LinearError]?
 }
 
 struct LinearStatesData: Codable {

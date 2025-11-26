@@ -2,10 +2,9 @@ import Foundation
 
 struct Configuration: Codable {
     // Task Tracker settings
-    let trackerType: String  // "jira", "linear", or "reminders"
+    let trackerType: String  // "jira" or "linear"
     let jiraURL: String?
     let jiraEmail: String?
-    let remindersListName: String?  // For Reminders tracker
 
     // GitHub settings
     let repo: String
@@ -14,7 +13,7 @@ struct Configuration: Codable {
     let autoCreateDraft: Bool
 
     // AI Agent settings
-    let aiAgentType: String?  // "claude-code", "aider", "cursor", "codex", "gemini", "copilot"
+    let aiAgentType: String?  // Only "claude-code" is supported
 
     // Execution settings
     let runTestsByDefault: Bool
@@ -24,7 +23,6 @@ struct Configuration: Codable {
         trackerType: String,
         jiraURL: String? = nil,
         jiraEmail: String? = nil,
-        remindersListName: String? = nil,
         repo: String,
         baseBranch: String,
         useGHCLI: Bool,
@@ -35,7 +33,6 @@ struct Configuration: Codable {
         self.trackerType = trackerType
         self.jiraURL = jiraURL
         self.jiraEmail = jiraEmail
-        self.remindersListName = remindersListName
         self.repo = repo
         self.baseBranch = baseBranch
         self.useGHCLI = useGHCLI
@@ -64,17 +61,57 @@ struct Configuration: Codable {
 
 enum ConfigurationManager {
     static var configPath: URL {
-        FileManager.default.homeDirectoryForCurrentUser
+        // Check for .env in current directory first, then fall back to home directory
+        let currentDir = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let localEnv = currentDir.appendingPathComponent(".env")
+
+        if FileManager.default.fileExists(atPath: localEnv.path) {
+            return localEnv
+        }
+
+        return FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".entrust")
-            .appendingPathComponent("config.json")
+            .appendingPathComponent(".env")
     }
 
     static func save(_ config: Configuration) throws {
         let directory = configPath.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
-        let data = try JSONEncoder().encode(config)
-        try data.write(to: configPath)
+        // Convert configuration to .env format
+        var lines: [String] = []
+        lines.append("# entrust configuration")
+        lines.append("# Generated on \(Date())")
+        lines.append("")
+
+        lines.append("# Task Tracker Settings")
+        lines.append("TRACKER_TYPE=\(config.trackerType)")
+        if let jiraURL = config.jiraURL {
+            lines.append("JIRA_URL=\(jiraURL)")
+        }
+        if let jiraEmail = config.jiraEmail {
+            lines.append("JIRA_EMAIL=\(jiraEmail)")
+        }
+        lines.append("")
+
+        lines.append("# GitHub Settings")
+        lines.append("GITHUB_REPO=\(config.repo)")
+        lines.append("BASE_BRANCH=\(config.baseBranch)")
+        lines.append("USE_GH_CLI=\(config.useGHCLI)")
+        lines.append("AUTO_CREATE_DRAFT=\(config.autoCreateDraft)")
+        lines.append("")
+
+        lines.append("# AI Agent Settings")
+        if let aiAgentType = config.aiAgentType {
+            lines.append("AI_AGENT_TYPE=\(aiAgentType)")
+        }
+        lines.append("")
+
+        lines.append("# Execution Settings")
+        lines.append("RUN_TESTS_BY_DEFAULT=\(config.runTestsByDefault)")
+
+        let content = lines.joined(separator: "\n") + "\n"
+        try content.write(to: configPath, atomically: true, encoding: .utf8)
 
         try FileManager.default.setAttributes(
             [.posixPermissions: 0o600],
@@ -87,8 +124,47 @@ enum ConfigurationManager {
             throw AutomationError.configurationNotFound
         }
 
-        let data = try Data(contentsOf: configPath)
-        return try JSONDecoder().decode(Configuration.self, from: data)
+        let content = try String(contentsOf: configPath, encoding: .utf8)
+        let lines = content.components(separatedBy: .newlines)
+
+        var env: [String: String] = [:]
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            // Skip empty lines and comments
+            if trimmed.isEmpty || trimmed.hasPrefix("#") {
+                continue
+            }
+
+            // Parse KEY=VALUE
+            if let separatorIndex = trimmed.firstIndex(of: "=") {
+                let key = String(trimmed[..<separatorIndex])
+                let value = String(trimmed[trimmed.index(after: separatorIndex)...])
+                env[key] = value
+            }
+        }
+
+        // Parse configuration from environment variables
+        guard let trackerType = env["TRACKER_TYPE"],
+              let repo = env["GITHUB_REPO"],
+              let baseBranch = env["BASE_BRANCH"] else {
+            throw AutomationError.configurationNotFound
+        }
+
+        let useGHCLI = env["USE_GH_CLI"]?.lowercased() == "true"
+        let autoCreateDraft = env["AUTO_CREATE_DRAFT"]?.lowercased() == "true"
+        let runTestsByDefault = env["RUN_TESTS_BY_DEFAULT"]?.lowercased() == "true"
+
+        return Configuration(
+            trackerType: trackerType,
+            jiraURL: env["JIRA_URL"],
+            jiraEmail: env["JIRA_EMAIL"],
+            repo: repo,
+            baseBranch: baseBranch,
+            useGHCLI: useGHCLI,
+            autoCreateDraft: autoCreateDraft,
+            aiAgentType: env["AI_AGENT_TYPE"],
+            runTestsByDefault: runTestsByDefault
+        )
     }
 
     static func clear() throws {

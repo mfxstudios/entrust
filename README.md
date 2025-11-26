@@ -8,6 +8,8 @@
 
 - **JIRA & Linear Integration**: Fetch tasks with full context
 - **Claude Code Automation**: AI implements features automatically
+- **Git Worktrees**: Isolated execution environments prevent conflicts
+- **Parallel Processing**: Process multiple tickets concurrently
 - **Git Integration**: Auto-creates branches and commits
 - **GitHub PRs**: Creates pull requests with detailed descriptions
 - **Status Updates**: Automatically updates ticket status
@@ -62,6 +64,12 @@ entrust run IOS-1234
 
 # With options
 entrust run IOS-1234 --draft --skip-tests
+
+# Process multiple tasks in parallel
+entrust parallel IOS-1234 IOS-1235 IOS-1236
+
+# From a file (one ticket per line)
+entrust parallel --file tickets.txt --max-concurrent 5
 ```
 
 ## Commands
@@ -78,7 +86,7 @@ entrust setup --clear  # Clear all stored configuration
 
 ### `run`
 
-Process a single task from JIRA or Linear.
+Process a single task from JIRA or Linear using an isolated git worktree.
 
 ```bash
 entrust run <task-id> [options]
@@ -90,7 +98,55 @@ Options:
   --draft                 Create PR as draft
   --skip-tests            Skip running tests
   --dry-run               Show execution plan without running
+  --keep-worktree         Keep worktree after completion (for debugging)
 ```
+
+**How it works:**
+- Creates an isolated git worktree in `/tmp/entrust-<ticket>-<uuid>`
+- Runs Claude Code in the worktree to implement the feature
+- Tests, commits, and pushes changes from the worktree
+- Creates a pull request and updates the ticket status
+- Automatically cleans up the worktree (unless `--keep-worktree` is used)
+
+### `parallel`
+
+Process multiple tasks concurrently using isolated git worktrees.
+
+```bash
+entrust parallel <task-id> [<task-id> ...] [options]
+
+Options:
+  --file <path>           Read ticket IDs from file (one per line)
+  --max-concurrent <n>    Maximum concurrent tasks (default: 3)
+  --tracker <type>        Task tracker [jira/linear]
+  --repo <org/repo>       GitHub repository
+  --base-branch <branch>  Base branch (default: main)
+  --draft                 Create PR as draft
+  --skip-tests            Skip running tests
+  --dry-run               Show execution plan without running
+  --keep-worktrees        Keep worktrees after completion (for debugging)
+```
+
+**Examples:**
+
+```bash
+# Process 3 tickets in parallel
+entrust parallel IOS-1234 IOS-1235 IOS-1236
+
+# Process tickets from a file with higher concurrency
+entrust parallel --file sprint-tickets.txt --max-concurrent 5
+
+# Preview what would be processed
+entrust parallel IOS-1234 IOS-1235 --dry-run
+```
+
+**How it works:**
+- Each ticket gets its own isolated git worktree in `/tmp/entrust-<ticket>-<uuid>`
+- Tasks are processed concurrently up to `--max-concurrent` limit
+- Each task runs Claude Code independently in its own worktree
+- Provides real-time progress output prefixed with `[ticket-id]`
+- Displays a summary report at the end with success/failure counts
+- Automatically cleans up all worktrees (unless `--keep-worktrees` is used)
 
 ### `status`
 
@@ -104,40 +160,101 @@ entrust status
 
 ### Configuration File
 
-Settings are stored in `~/.entrust/config.json`:
+Settings are stored in a `.env` file. The tool checks for `.env` in the current directory first, then falls back to `~/.entrust/.env`:
 
-```json
-{
-  "trackerType": "jira",
-  "jiraURL": "https://your-company.atlassian.net",
-  "jiraEmail": "you@company.com",
-  "repo": "your-org/your-repo",
-  "baseBranch": "main",
-  "useGHCLI": false,
-  "runTestsByDefault": true,
-  "autoCreateDraft": false
-}
+**Example for JIRA:**
+```bash
+# entrust configuration
+
+# Task Tracker Settings
+TRACKER_TYPE=jira
+JIRA_URL=https://your-company.atlassian.net
+JIRA_EMAIL=you@company.com
+
+# GitHub Settings
+GITHUB_REPO=your-org/your-repo
+BASE_BRANCH=main
+USE_GH_CLI=true
+AUTO_CREATE_DRAFT=false
+
+# AI Agent Settings
+AI_AGENT_TYPE=claude-code
+
+# Execution Settings
+RUN_TESTS_BY_DEFAULT=true
 ```
+
+**Example for Linear:**
+```bash
+# entrust configuration
+
+# Task Tracker Settings
+TRACKER_TYPE=linear
+
+# GitHub Settings
+GITHUB_REPO=your-org/your-repo
+BASE_BRANCH=main
+USE_GH_CLI=true
+AUTO_CREATE_DRAFT=false
+
+# AI Agent Settings
+AI_AGENT_TYPE=claude-code
+
+# Execution Settings
+RUN_TESTS_BY_DEFAULT=true
+```
+
+**Priority Order:**
+1. `.env` in current directory (project-specific configuration)
+2. `~/.entrust/.env` (global configuration)
+
+This allows you to have project-specific settings that override your global defaults.
 
 ### Credentials
 
-Credentials are stored securely in macOS Keychain:
-- JIRA API token
-- Linear API token
-- GitHub personal access token (if not using gh CLI)
+API tokens and credentials are **never** stored in `.env` files. They are stored securely in macOS Keychain:
+- **JIRA API token**: Required when `TRACKER_TYPE=jira`
+- **Linear API token**: Required when `TRACKER_TYPE=linear`
+- **GitHub personal access token**: Required when `USE_GH_CLI=false`
+
+Run `entrust setup` to securely store your credentials in the Keychain.
 
 ## Workflow
 
+### Single Task (`run`)
+
 When you run `entrust run IOS-1234`, the tool:
 
-1. **Fetches** the task from JIRA/Linear
-2. **Creates** a feature branch (e.g., `feature/IOS-1234-implement-login`)
-3. **Runs** Claude Code with task context: `claude -p "prompt"`
-4. **Tests** the implementation (unless `--skip-tests`)
-5. **Commits** changes with descriptive message
-6. **Pushes** to GitHub
-7. **Creates** pull request
-8. **Updates** task status to "In Review"
+1. **Creates** an isolated git worktree in `/tmp/entrust-IOS-1234-<uuid>`
+2. **Fetches** the task from JIRA/Linear
+3. **Updates** ticket status to "In Progress"
+4. **Creates** a feature branch (e.g., `feature/IOS-1234`)
+5. **Runs** Claude Code in the worktree: `claude -p "prompt"`
+6. **Tests** the implementation in the worktree (unless `--skip-tests`)
+7. **Commits** changes with descriptive message
+8. **Pushes** to GitHub
+9. **Creates** pull request
+10. **Updates** task status to "In Review"
+11. **Cleans up** the worktree (unless `--keep-worktree`)
+
+### Multiple Tasks (`parallel`)
+
+When you run `entrust parallel IOS-1234 IOS-1235 IOS-1236`, the tool:
+
+1. **Creates** isolated git worktrees for each ticket
+2. **Processes** up to `--max-concurrent` (default 3) tickets simultaneously
+3. **Each ticket** follows the same workflow as `run`, but in its own worktree
+4. **Displays** real-time progress for all running tasks
+5. **Prints** a summary report with success/failure counts and PR URLs
+6. **Cleans up** all worktrees (unless `--keep-worktrees`)
+
+### Why Worktrees?
+
+Git worktrees provide isolation between tasks:
+- **No conflicts**: Each task works in its own directory
+- **Clean state**: Fresh working directory per task
+- **Parallel safety**: Multiple Claude Code instances don't interfere
+- **Easy debugging**: Use `--keep-worktree` to inspect the state after execution
 
 
 ## Claude Code
@@ -178,7 +295,7 @@ Sources/entrust/
 │   ├── JIRA/
 │   └── Linear/
 ├── Managers/             # GitHub, Configuration, Keychain
-├── Subcommands/          # CLI commands (setup, run, status)
+├── Subcommands/          # CLI commands (setup, run, parallel, status)
 ├── Extensions/           # String sanitization, etc.
 └── TicketAutomation.swift  # Main workflow orchestration
 ```

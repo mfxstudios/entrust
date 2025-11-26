@@ -2,6 +2,7 @@ import Foundation
 
 struct TicketAutomation: Sendable {
     let ticketID: String
+    let repoRoot: String
     let taskTracker: any TaskTracker
     let githubService: GitHubService
     let aiAgent: any AIAgent
@@ -10,6 +11,7 @@ struct TicketAutomation: Sendable {
 
     init(
         ticketID: String,
+        repoRoot: String,
         taskTracker: any TaskTracker,
         githubService: GitHubService,
         aiAgent: any AIAgent,
@@ -17,6 +19,7 @@ struct TicketAutomation: Sendable {
         draft: Bool = false
     ) {
         self.ticketID = ticketID
+        self.repoRoot = repoRoot
         self.taskTracker = taskTracker
         self.githubService = githubService
         self.aiAgent = aiAgent
@@ -40,30 +43,50 @@ struct TicketAutomation: Sendable {
             print("⚠️  Warning: Could not change status: \(error.localizedDescription)")
         }
 
-        // Create branch first
-        print("\n🌿 Creating feature branch...")
+        // Create worktree for isolated execution
+        print("\n🌿 Creating worktree...")
         let sanitizedTicketID = ticketID.sanitizedForBranchName()
+        let worktreePath = "/tmp/entrust-\(sanitizedTicketID)-\(UUID().uuidString.prefix(8))"
         let branch = "feature/\(sanitizedTicketID)"
-        try await githubService.createBranch(
-            name: branch,
-            from: githubService.configuration.baseBranch,
-            in: nil
-        )
 
-        // Build simple, direct prompt
+        do {
+            try await githubService.createWorktree(
+                path: worktreePath,
+                branch: branch,
+                baseBranch: githubService.configuration.baseBranch,
+                in: repoRoot
+            )
+        } catch {
+            print("❌ Failed to create worktree: \(error.localizedDescription)")
+            throw error
+        }
+
+        print("💡 Worktree created at: \(worktreePath)")
+
+        // Build prompt
         let prompt = buildPrompt(for: issue)
 
-        // Run Claude Code directly in current directory
-        print("\n🤖 Running Claude Code...\n")
+        // Run Claude Code in worktree
+        print("\n🤖 Running Claude Code in worktree: \(worktreePath)\n")
         let agentResult = try await aiAgent.execute(
             prompt: prompt,
-            context: AIAgentContext()
+            context: AIAgentContext(workingDirectory: worktreePath)
         )
+
+        // Check what files changed
+        print("\n📝 Checking for changes...")
+        let gitStatus = try await Shell.run(["git", "status", "--short"], workingDirectory: worktreePath)
+        if !gitStatus.isEmpty {
+            print("Changes detected:")
+            print(gitStatus)
+        } else {
+            print("⚠️  No files were modified by Claude Code")
+        }
 
         // Run tests if needed
         if !skipTests {
-            print("\n\n🧪 Running tests...")
-            try await runTests()
+            print("\n\n🧪 Running tests in worktree...")
+            try await runTests(in: worktreePath)
         }
 
         // Commit and push
@@ -71,7 +94,7 @@ struct TicketAutomation: Sendable {
         let hasChanges = try await githubService.commitAndPush(
             message: "[\(ticketID)] \(issue.title)",
             branch: branch,
-            in: nil
+            in: worktreePath
         )
 
         guard hasChanges else {
@@ -125,14 +148,51 @@ struct TicketAutomation: Sendable {
         """
     }
 
-    func runTests() async throws {
-        let output = try await Shell.run("swift", "test")
+    func runTests(in worktreePath: String) async throws {
+        print("🔍 Running tests in directory: \(worktreePath)")
 
-        if output.contains("FAILED") || output.contains("error:") {
-            throw AutomationError.testsFailed
+        // Verify the worktree path exists
+        let fileManager = FileManager.default
+        if !fileManager.fileExists(atPath: worktreePath) {
+            throw AutomationError.shellCommandFailed("Worktree path does not exist: \(worktreePath)")
         }
 
-        print("✅ All tests passed")
+        // Detect project type
+        let contents = try fileManager.contentsOfDirectory(atPath: worktreePath)
+        let hasPackageSwift = contents.contains("Package.swift")
+        let xcodeProjects = contents.filter { $0.hasSuffix(".xcodeproj") }
+        let xcodeWorkspaces = contents.filter { $0.hasSuffix(".xcworkspace") }
+
+        if hasPackageSwift {
+            // Swift Package Manager project
+            print("📦 Detected SPM project, running swift test...")
+            let output = try await Shell.run(["swift", "test"], workingDirectory: worktreePath)
+
+            if output.contains("FAILED") || output.contains("error:") {
+                throw AutomationError.testsFailed
+            }
+        } else if !xcodeWorkspaces.isEmpty {
+            // Xcode workspace
+            let workspace = xcodeWorkspaces[0]
+            print("🏗️  Detected Xcode workspace: \(workspace)")
+            print("⚠️  Skipping tests - Xcode workspace testing requires specific scheme configuration")
+            print("   To enable, configure your project with a test scheme and update this command")
+            // Could run: xcodebuild test -workspace "\(workspace)" -scheme "<scheme>" -destination "platform=iOS Simulator,name=iPhone 15"
+        } else if !xcodeProjects.isEmpty {
+            // Xcode project
+            let project = xcodeProjects[0]
+            print("🏗️  Detected Xcode project: \(project)")
+            print("⚠️  Skipping tests - Xcode project testing requires specific scheme configuration")
+            print("   To enable, configure your project with a test scheme and update this command")
+            // Could run: xcodebuild test -project "\(project)" -scheme "<scheme>" -destination "platform=iOS Simulator,name=iPhone 15"
+        } else {
+            print("⚠️  No recognizable project structure found")
+            print("📂 Worktree contents:")
+            print(contents.joined(separator: "\n"))
+            throw AutomationError.shellCommandFailed("Unable to determine project type")
+        }
+
+        print("✅ Test step completed")
     }
 
     func buildPRBody(issue: TaskIssue, agentOutput: String) -> String {

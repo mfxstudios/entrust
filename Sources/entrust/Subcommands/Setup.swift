@@ -3,7 +3,7 @@ import Foundation
 
 struct Setup: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        abstract: "Configure JIRA/Linear/Reminders and GitHub credentials"
+        abstract: "Configure JIRA/Linear and GitHub credentials"
     )
 
     @Flag(name: .long, help: "Show current configuration")
@@ -29,9 +29,9 @@ struct Setup: AsyncParsableCommand {
 
         // Task Tracker Configuration
         print("📋 Task Tracker Configuration")
-        let trackerType = readInput("Task tracker type [jira/linear/reminders]: ").lowercased()
+        let trackerType = readInput("Task tracker type [jira/linear]: ").lowercased()
 
-        guard trackerType == "jira" || trackerType == "linear" || trackerType == "reminders" else {
+        guard trackerType == "jira" || trackerType == "linear" else {
             throw AutomationError.invalidTrackerType
         }
 
@@ -39,7 +39,6 @@ struct Setup: AsyncParsableCommand {
         var jiraEmail: String?
         var jiraToken: String?
         var linearToken: String?
-        var remindersListName: String?
 
         if trackerType == "jira" {
             jiraURL = readInput("JIRA URL (e.g., https://your-org.atlassian.net): ")
@@ -47,10 +46,6 @@ struct Setup: AsyncParsableCommand {
             jiraToken = readSecureInput("JIRA API Token: ")
         } else if trackerType == "linear" {
             linearToken = readSecureInput("Linear API Token: ")
-        } else if trackerType == "reminders" {
-            print("\n📱 Reminders Configuration")
-            print("   Use Reminders app lists as Kanban columns (e.g., Backlog, In Progress, In Review, Done)")
-            remindersListName = readInput("Primary Reminders list name (where tasks are stored): ")
         }
 
         // GitHub Configuration
@@ -67,8 +62,8 @@ struct Setup: AsyncParsableCommand {
 
         // AI Agent Configuration
         print("\n🤖 AI Agent Configuration")
-        print("   Available agents: claude-code, aider, cursor, codex, gemini, copilot")
-        let aiAgentType = readInput("AI agent [claude-code]: ", default: "claude-code").lowercased()
+        print("   Only Claude Code is supported")
+        let aiAgentType = "claude-code"
 
         // Additional Settings
         print("\n⚙️  Additional Settings")
@@ -80,7 +75,6 @@ struct Setup: AsyncParsableCommand {
             trackerType: trackerType,
             jiraURL: jiraURL,
             jiraEmail: jiraEmail,
-            remindersListName: remindersListName,
             repo: repo,
             baseBranch: baseBranch,
             useGHCLI: useGHCLI,
@@ -143,8 +137,6 @@ struct Setup: AsyncParsableCommand {
         if config.trackerType == "jira" {
             print("JIRA URL:           \(config.jiraURL ?? "N/A")")
             print("JIRA Email:         \(config.jiraEmail ?? "N/A")")
-        } else if config.trackerType == "reminders" {
-            print("Reminders List:     \(config.remindersListName ?? "N/A")")
         }
 
         print("Repository:         \(config.repo)")
@@ -154,16 +146,13 @@ struct Setup: AsyncParsableCommand {
         print("Run Tests:          \(config.runTestsByDefault ? "Yes" : "No")")
 
         print("\n🤖 AI Agent")
-        let agentType = AIAgentType(rawValue: config.aiAgentType ?? "claude-code") ?? .claudeCode
-        print("Agent:              \(agentType.displayName)")
+        print("Agent:              Claude Code")
 
         print("\n🔐 Stored Credentials")
         if config.trackerType == "jira" {
             print("JIRA Token:         \(KeychainManager.exists(.jiraToken) ? "✓ Stored" : "✗ Missing")")
         } else if config.trackerType == "linear" {
             print("Linear Token:       \(KeychainManager.exists(.linearToken) ? "✓ Stored" : "✗ Missing")")
-        } else if config.trackerType == "reminders" {
-            print("Reminders:          ✓ Using macOS Reminders (no token needed)")
         }
 
         if !config.useGHCLI {

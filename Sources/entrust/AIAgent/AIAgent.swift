@@ -84,11 +84,14 @@ struct ClaudeCodeAgent: AIAgent, Sendable {
     func execute(prompt: String, context: AIAgentContext) async throws -> AIAgentResult {
         let startTime = Date()
 
-        // Simply run: claude -p "prompt"
-        // Claude will work in the current directory by default
-        let args = [command, "-p", prompt]
+        // Run: claude -p --dangerously-skip-permissions "prompt"
+        let args = [command, "-p", "--dangerously-skip-permissions", prompt]
 
-        let output = try await Shell.run(args, streamOutput: true)
+        let output = try await Shell.run(
+            args,
+            streamOutput: true,
+            workingDirectory: context.workingDirectory
+        )
 
         let executionTime = Date().timeIntervalSince(startTime)
 

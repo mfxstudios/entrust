@@ -84,6 +84,10 @@ struct Run: AsyncParsableCommand {
             return
         }
 
+        // Get current repo root
+        let repoRoot = try await Shell.run("git", "rev-parse", "--show-toplevel")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
         // Create GitHub service
         let githubConfig = GitHubConfiguration(
             repo: effectiveRepo,
@@ -96,6 +100,7 @@ struct Run: AsyncParsableCommand {
 
         let automation = TicketAutomation(
             ticketID: ticketID,
+            repoRoot: repoRoot,
             taskTracker: taskTracker,
             githubService: githubService,
             aiAgent: agent,

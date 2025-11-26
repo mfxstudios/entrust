@@ -137,21 +137,32 @@ struct GitHubService: GitHubServiceProtocol, Sendable {
     }
 
     func commitAndPush(message: String, branch: String, in workingDirectory: String? = nil) async throws -> Bool {
-        let gitArgs = gitCommand(for: workingDirectory)
+        print("📋 Staging changes in \(workingDirectory ?? "current directory")...")
 
         // Stage all changes
-        try await Shell.run(gitArgs + ["add", "."])
+        try await Shell.run(["git", "add", "."], workingDirectory: workingDirectory)
 
         // Check if there are any changes to commit
-        let status = try await Shell.run(gitArgs + ["status", "--porcelain"])
+        print("🔍 Checking git status...")
+        let status = try await Shell.run(["git", "status", "--porcelain"], workingDirectory: workingDirectory)
+
         if status.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             print("⚠️  No changes to commit")
             return false
         }
 
-        // Commit and push
-        try await Shell.run(gitArgs + ["commit", "-m", message])
-        try await Shell.run(gitArgs + ["push", "origin", branch])
+        print("📝 Changes to commit:")
+        print(status)
+
+        // Commit
+        print("💾 Committing with message: \(message)")
+        try await Shell.run(["git", "commit", "-m", message], workingDirectory: workingDirectory)
+
+        // Push
+        print("📤 Pushing to origin/\(branch)...")
+        try await Shell.run(["git", "push", "origin", branch], workingDirectory: workingDirectory)
+
+        print("✅ Successfully committed and pushed")
         return true
     }
 
@@ -221,7 +232,6 @@ enum Shell {
 
         if streamOutput {
             // Stream output directly to stdout/stderr for real-time feedback
-            // Simply inherit parent's stdout/stderr for real-time display
             process.standardOutput = FileHandle.standardOutput
             process.standardError = FileHandle.standardError
 
@@ -232,8 +242,7 @@ enum Shell {
                 throw AutomationError.shellCommandFailed("Command failed with status \(process.terminationStatus)")
             }
 
-            // When streaming, we don't capture output, so return empty string
-            // The caller gets real-time feedback instead
+            // When streaming, we don't capture output
             return ""
         } else {
             // Original behavior: capture output without streaming

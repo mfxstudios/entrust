@@ -17,7 +17,7 @@ struct LinearTrackerTests {
             let tracker = LinearTracker(token: "test-token")
 
             // Then
-            #expect(tracker.baseURL == "https://linear.app")
+            #expect(tracker.baseURL == "https://api.linear.app")
         }
     }
 
@@ -56,7 +56,7 @@ struct LinearTrackerTests {
             // Note: This test validates the request format. In a real scenario,
             // you would inject a mock URLSession into LinearTracker.
             // For now, we verify the tracker configuration is correct.
-            #expect(tracker.baseURL == "https://linear.app")
+            #expect(tracker.baseURL == "https://api.linear.app")
         }
     }
 
@@ -92,7 +92,7 @@ struct LinearTrackerTests {
             // 1. First fetch available statuses via getAvailableStatuses
             // 2. Find the matching status (case-insensitive)
             // 3. Execute the IssueUpdate mutation with the stateId
-            #expect(tracker.baseURL == "https://linear.app")
+            #expect(tracker.baseURL == "https://api.linear.app")
         }
     }
 
@@ -140,9 +140,9 @@ struct LinearResponseModelTests {
         let response = try JSONDecoder().decode(LinearResponse.self, from: json)
 
         // Then
-        #expect(response.data.issue?.identifier == "ENG-456")
-        #expect(response.data.issue?.title == "Test Issue")
-        #expect(response.data.issue?.description == "Test description")
+        #expect(response.data?.issue?.identifier == "ENG-456")
+        #expect(response.data?.issue?.title == "Test Issue")
+        #expect(response.data?.issue?.description == "Test description")
     }
 
     @Test("Given a response with null issue, When decoding, Then issue is nil")
@@ -160,7 +160,7 @@ struct LinearResponseModelTests {
         let response = try JSONDecoder().decode(LinearResponse.self, from: json)
 
         // Then
-        #expect(response.data.issue == nil)
+        #expect(response.data?.issue == nil)
     }
 
     @Test("Given a response with null description, When decoding, Then description is nil")
@@ -183,7 +183,7 @@ struct LinearResponseModelTests {
         let response = try JSONDecoder().decode(LinearResponse.self, from: json)
 
         // Then
-        #expect(response.data.issue?.description == nil)
+        #expect(response.data?.issue?.description == nil)
     }
 }
 
@@ -217,7 +217,7 @@ struct LinearStatesResponseTests {
         let response = try JSONDecoder().decode(LinearStatesResponse.self, from: json)
 
         // Then
-        let states = response.data.issue?.team.states.nodes
+        let states = response.data?.issue?.team.states.nodes
         #expect(states?.count == 3)
         #expect(states?[0].name == "Backlog")
         #expect(states?[1].name == "In Progress")
