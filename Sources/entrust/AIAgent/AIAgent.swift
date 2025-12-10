@@ -109,12 +109,8 @@ struct ClaudeCodeAgent: AIAgent, Sendable {
         }
 
         // Auto-detect best backend (Agent SDK is 2-10x faster)
-        config.backend = NodePathDetector.isAgentSDKInstalled() ? .agentSDK : .headless
-
-        // Add nvm path if available
-        if let nvmPath = NvmPathDetector.detectNvmPath() {
-            config.additionalPaths.append(nvmPath)
-        }
+        let detector = BackendDetector(configuration: config)
+        config.backend = detector.detect().recommendedBackend
 
         let client = try ClaudeCodeClient(configuration: config)
 
@@ -130,7 +126,7 @@ struct ClaudeCodeAgent: AIAgent, Sendable {
         3. Confirm the implementation is complete
         """
 
-        // Execute - the SDK handles output streaming internally when verbose is enabled
+        // Execute with streaming for real-time output
         if let sessionId = sessionId {
             print("🤖 Claude Code continuing conversation (session: \(sessionId.prefix(8))...) with \(config.backend == .agentSDK ? "Agent SDK" : "Headless") backend...")
         } else {
@@ -139,57 +135,72 @@ struct ClaudeCodeAgent: AIAgent, Sendable {
         print("")  // Add newline before output
 
         do {
-            let result: ClaudeCodeResult
+            let stream: ClaudeCodeStream
 
             if let sessionId = sessionId {
-                // Continue existing conversation
-                result = try await client.resumeConversation(
+                // Continue existing conversation with streaming
+                let result = try await client.resumeConversation(
                     sessionId: sessionId,
                     prompt: prompt,
-                    outputFormat: .text,
+                    outputFormat: .streamJson,
                     options: options
                 )
+                guard case .stream(let resultStream) = result else {
+                    throw ClaudeCodeError.invalidOutput("Expected stream result")
+                }
+                stream = resultStream
             } else {
-                // Start new conversation
-                result = try await client.runSinglePrompt(
-                    prompt: prompt,
-                    outputFormat: .text,
-                    options: options
-                )
+                // Start new conversation with streaming
+                stream = try await client.runStream(prompt, options: options)
+            }
+
+            // Process stream and collect output in real-time
+            var collectedText: [String] = []
+            var finalSessionId: String?
+
+            for try await chunk in stream {
+                // Extract session ID
+                finalSessionId = chunk.sessionId
+
+                // Handle different chunk types
+                switch chunk {
+                case .assistant(let assistantMsg):
+                    // Print assistant messages in real-time
+                    for contentBlock in assistantMsg.message.content {
+                        switch contentBlock {
+                        case .text(let textContent):
+                            print(textContent.text, terminator: "")
+                            fflush(stdout)
+                            collectedText.append(textContent.text)
+                        case .toolUse(let toolUse):
+                            print("\n🔧 Using tool: \(toolUse.name)")
+                        default:
+                            break
+                        }
+                    }
+
+                case .result(let resultMsg):
+                    // Final result message
+                    finalSessionId = resultMsg.sessionId
+
+                default:
+                    // Ignore other chunk types (initSystem, user)
+                    break
+                }
             }
 
             let executionTime = Date().timeIntervalSince(startTime)
 
-            // Extract output based on result type
-            let output: String
-            let resultSessionId: String?
-
-            switch result {
-            case .text(let content):
-                output = content
-                resultSessionId = nil
-                // The SDK already printed the output during execution when verbose=true
-                // Just show completion message
-                print("\n✅ Claude Code finished")
-
-            case .json(let response):
-                output = response.sessionId
-                resultSessionId = response.sessionId
-                print("\n✅ Claude Code finished")
-
-            case .stream:
-                // Not used, but required for exhaustive switch
-                output = ""
-                resultSessionId = nil
-            }
-
+            print("\n✅ Claude Code finished")
             print("📊 Execution completed in \(Int(executionTime))s")
+
+            let output = collectedText.joined()
 
             return AIAgentResult(
                 output: output,
                 success: true,
                 executionTime: executionTime,
-                sessionId: resultSessionId
+                sessionId: finalSessionId
             )
 
         } catch let error as ClaudeCodeError {

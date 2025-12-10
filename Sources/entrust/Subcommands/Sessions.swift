@@ -43,9 +43,9 @@ struct Sessions: AsyncParsableCommand {
             print("Found \(projects.count) project(s) with sessions:\n")
 
             for project in projects {
-                print("📂 \(project)")
+                print("📂 \(project.path)")
 
-                let sessions = try await storage.getSessions(for: project)
+                let sessions = try await storage.getSessions(for: project.path)
                 let limitedSessions = limit.map { Array(sessions.prefix($0)) } ?? sessions
 
                 printSessions(limitedSessions, indent: "   ")

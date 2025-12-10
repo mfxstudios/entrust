@@ -35,11 +35,10 @@ struct Continue: AsyncParsableCommand {
         // Configure ClaudeCodeSDK
         var claudeConfig = ClaudeCodeConfiguration.default
         claudeConfig.workingDirectory = effectiveWorkingDirectory
-        claudeConfig.backend = NodePathDetector.isAgentSDKInstalled() ? .agentSDK : .headless
 
-        if let nvmPath = NvmPathDetector.detectNvmPath() {
-            claudeConfig.additionalPaths.append(nvmPath)
-        }
+        // Auto-detect best backend
+        let detector = BackendDetector(configuration: claudeConfig)
+        claudeConfig.backend = detector.detect().recommendedBackend
 
         let client = try ClaudeCodeClient(configuration: claudeConfig)
 
