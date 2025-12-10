@@ -109,6 +109,9 @@ entrust run IOS-1234
 
 # With options
 entrust run IOS-1234 --draft --skip-tests
+
+# Run in a new terminal window (keeps your current terminal free)
+entrust run IOS-1234 --new-terminal
 ```
 
 ### 3. Process Multiple Tasks in Parallel
@@ -155,6 +158,7 @@ entrust run <task-id> [options]
 Options:
   --draft                 Create PR as draft
   --skip-tests            Skip running tests
+  --new-terminal          Run Claude Code in a new terminal window
   --repo-root <path>      Repository root directory
 ```
 
@@ -181,6 +185,7 @@ Options:
   --max-concurrent <n>    Maximum concurrent tasks (default: 3)
   --draft                 Create PRs as drafts
   --skip-tests            Skip running tests
+  --new-terminal          Run each ticket in a separate terminal window
 ```
 
 **Examples:**
@@ -194,7 +199,12 @@ entrust parallel --file sprint-tickets.txt --max-concurrent 5
 
 # Create draft PRs for review
 entrust parallel IOS-1234 IOS-1235 --draft
+
+# Launch each ticket in its own terminal window (best for monitoring)
+entrust parallel IOS-1234 IOS-1235 IOS-1236 --new-terminal
 ```
+
+**Note:** When using `--new-terminal`, each ticket runs in a dedicated terminal window instead of using worktree-based parallelization. This provides better visibility but doesn't enforce the `--max-concurrent` limit.
 
 ### `feedback`
 
@@ -304,6 +314,7 @@ AI_AGENT_TYPE=claude-code
 # Execution Settings
 RUN_TESTS_BY_DEFAULT=true
 MAX_RETRY_ATTEMPTS=3
+USE_NEW_TERMINAL=false
 ```
 
 **Example `.env` for Linear:**
@@ -324,6 +335,7 @@ AI_AGENT_TYPE=claude-code
 # Execution Settings
 RUN_TESTS_BY_DEFAULT=true
 MAX_RETRY_ATTEMPTS=3
+USE_NEW_TERMINAL=false
 ```
 
 ### Credentials (Keychain)
@@ -348,6 +360,35 @@ MAX_RETRY_ATTEMPTS=3  # Default: 3, Range: 0-10
 # 1 = Retry once
 # 3 = Retry up to 3 times (recommended)
 ```
+
+### New Terminal Mode
+
+Run Claude Code in a separate terminal window to keep your current terminal free:
+
+```bash
+# In .env file
+USE_NEW_TERMINAL=true  # Default: false
+
+# Or use the command-line flag (single ticket)
+entrust run IOS-1234 --new-terminal
+
+# For parallel processing (each ticket in its own window)
+entrust parallel IOS-1234 IOS-1235 IOS-1236 --new-terminal
+```
+
+**How it works:**
+- **macOS**: Automatically detects and uses Terminal.app or iTerm2
+- **Linux**: Supports gnome-terminal, konsole, xfce4-terminal, and xterm
+- The original terminal returns immediately while Claude Code runs in the new window
+- The new window stays open after completion so you can review the output
+- With `parallel --new-terminal`, each ticket gets its own dedicated window
+
+**Use cases:**
+- Working on multiple tickets simultaneously (each in its own window)
+- Keeping your main terminal free for other commands
+- Better visibility of Claude Code's streaming output
+- Easier to monitor long-running tasks
+- Visual separation when processing multiple tickets
 
 ## 🔄 Workflows
 

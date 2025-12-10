@@ -18,6 +18,7 @@ struct Configuration: Codable {
     // Execution settings
     let runTestsByDefault: Bool
     let maxRetryAttempts: Int
+    let useNewTerminal: Bool  // Run Claude Code in a new terminal window
 
     // Xcode-specific settings
     let xcodeScheme: String?
@@ -35,6 +36,7 @@ struct Configuration: Codable {
         aiAgentType: String? = "claude-code",
         runTestsByDefault: Bool,
         maxRetryAttempts: Int = 3,
+        useNewTerminal: Bool = false,
         xcodeScheme: String? = nil,
         xcodeDestination: String? = nil
     ) {
@@ -48,6 +50,7 @@ struct Configuration: Codable {
         self.aiAgentType = aiAgentType
         self.runTestsByDefault = runTestsByDefault
         self.maxRetryAttempts = maxRetryAttempts
+        self.useNewTerminal = useNewTerminal
         self.xcodeScheme = xcodeScheme
         self.xcodeDestination = xcodeDestination
     }
@@ -121,6 +124,7 @@ enum ConfigurationManager {
         lines.append("# Execution Settings")
         lines.append("RUN_TESTS_BY_DEFAULT=\(config.runTestsByDefault)")
         lines.append("MAX_RETRY_ATTEMPTS=\(config.maxRetryAttempts)")
+        lines.append("USE_NEW_TERMINAL=\(config.useNewTerminal)")
         lines.append("")
 
         lines.append("# Xcode Settings (optional)")
@@ -175,6 +179,7 @@ enum ConfigurationManager {
         let autoCreateDraft = env["AUTO_CREATE_DRAFT"]?.lowercased() == "true"
         let runTestsByDefault = env["RUN_TESTS_BY_DEFAULT"]?.lowercased() == "true"
         let maxRetryAttempts = Int(env["MAX_RETRY_ATTEMPTS"] ?? "3") ?? 3
+        let useNewTerminal = env["USE_NEW_TERMINAL"]?.lowercased() == "true"
 
         return Configuration(
             trackerType: trackerType,
@@ -187,6 +192,7 @@ enum ConfigurationManager {
             aiAgentType: env["AI_AGENT_TYPE"],
             runTestsByDefault: runTestsByDefault,
             maxRetryAttempts: maxRetryAttempts,
+            useNewTerminal: useNewTerminal,
             xcodeScheme: env["XCODE_SCHEME"],
             xcodeDestination: env["XCODE_DESTINATION"]
         )

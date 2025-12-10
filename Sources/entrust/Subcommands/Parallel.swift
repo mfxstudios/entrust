@@ -39,6 +39,9 @@ struct Parallel: AsyncParsableCommand {
     @Flag(name: .long, help: "Dry run - show execution plan without running")
     var dryRun: Bool = false
 
+    @Flag(name: .long, help: "Run each ticket in a separate terminal window")
+    var newTerminal: Bool = false
+
     func run() async throws {
         let config = try ConfigurationManager.load()
 
@@ -70,6 +73,13 @@ struct Parallel: AsyncParsableCommand {
         let effectiveUseGHCLI = useGHCLI || config.useGHCLI
         let effectiveSkipTests = skipTests || !config.runTestsByDefault
         let effectiveDraft = draft || config.autoCreateDraft
+        let effectiveNewTerminal = newTerminal || config.useNewTerminal
+
+        // If new terminal is requested, launch each ticket in a separate terminal
+        if effectiveNewTerminal {
+            try await launchInNewTerminals(tickets: allTickets)
+            return
+        }
 
         // Only JIRA and Linear supported
         guard effectiveTracker == "jira" || effectiveTracker == "linear" else {
@@ -135,6 +145,69 @@ struct Parallel: AsyncParsableCommand {
         )
 
         try await executor.execute()
+    }
+
+    /// Launch each ticket in a separate terminal window
+    private func launchInNewTerminals(tickets: [String]) async throws {
+        print("🚀 Launching \(tickets.count) ticket(s) in separate terminal windows...")
+        print("")
+
+        // Get the path to entrust binary
+        let entrustPath = ProcessInfo.processInfo.arguments[0]
+
+        // Get current directory
+        let workingDirectory = FileManager.default.currentDirectoryPath
+
+        // Build base arguments
+        var baseArgs: [String] = ["run"]
+
+        // Add options
+        if let tracker = tracker {
+            baseArgs.append(contentsOf: ["--tracker", tracker])
+        }
+        if let jiraURL = jiraURL {
+            baseArgs.append(contentsOf: ["--jira-url", jiraURL])
+        }
+        if let repo = repo {
+            baseArgs.append(contentsOf: ["--repo", repo])
+        }
+        if let baseBranch = baseBranch {
+            baseArgs.append(contentsOf: ["--base-branch", baseBranch])
+        }
+        if useGHCLI {
+            baseArgs.append("--use-gh-cli")
+        }
+        if skipTests {
+            baseArgs.append("--skip-tests")
+        }
+        if draft {
+            baseArgs.append("--draft")
+        }
+
+        // Launch each ticket in a separate terminal
+        for (index, ticket) in tickets.enumerated() {
+            var args = baseArgs
+            args.insert(ticket, at: 1)  // Insert ticket ID after "run"
+
+            let command = "\(entrustPath) \(args.joined(separator: " ")); echo ''; echo 'Press Enter to close...'; read"
+
+            print("[\(index + 1)/\(tickets.count)] Launching \(ticket)...")
+
+            try await TerminalLauncher.launch(
+                command: command,
+                workingDirectory: workingDirectory,
+                title: "entrust - \(ticket)"
+            )
+
+            // Small delay between launches to avoid overwhelming the system
+            if index < tickets.count - 1 {
+                try await Task.sleep(nanoseconds: 500_000_000)  // 0.5 seconds
+            }
+        }
+
+        print("")
+        print("✅ All \(tickets.count) ticket(s) launched in separate terminals")
+        print("💡 Each terminal window will stay open for you to review the results")
     }
 }
 
