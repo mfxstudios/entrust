@@ -5,7 +5,9 @@ import PackageDescription
 
 let package = Package(
     name: "entrust",
-    platforms: [.macOS(.v15)],
+    platforms: [
+        .macOS(.v15)
+    ],
     products: [
         .executable(name: "entrust", targets: ["entrust"]),
     ],

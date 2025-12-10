@@ -79,7 +79,7 @@ enum AIAgentType: String, Codable, CaseIterable, Sendable {
     }
 
     var additionalArgs: [String] {
-        return ["-p", ""]  // Headless print mode
+        return ["-p"]  // Headless print mode
     }
 }
 

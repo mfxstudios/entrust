@@ -1,116 +1,177 @@
 # entrust
 
-> Automate iOS development from JIRA/Linear ticket to PR using Claude Code
+> Automate your development workflow from task tracker to pull request using Claude Code
 
-**entrust** is a Swift CLI tool that fully automates the development workflow: fetch a task from JIRA or Linear, run Claude Code to implement it, and create a pull request - all with a single command.
+**entrust** is a Swift CLI tool that automates the entire development workflow: fetch tasks from JIRA or Linear, implement them using Claude Code AI, run tests with automatic retry, and create pull requests - all with a single command. It also handles PR feedback iteration by continuing Claude Code sessions automatically.
 
-## Features
+[![Swift 6.0+](https://img.shields.io/badge/Swift-6.0+-orange.svg)](https://swift.org)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey.svg)](https://www.apple.com/macos/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-- **JIRA & Linear Integration**: Fetch tasks with full context
-- **Claude Code Automation**: AI implements features automatically
-- **Git Worktrees**: Isolated execution environments prevent conflicts
-- **Parallel Processing**: Process multiple tickets concurrently
-- **Git Integration**: Auto-creates branches and commits
-- **GitHub PRs**: Creates pull requests with detailed descriptions
-- **Status Updates**: Automatically updates ticket status
-- **Swift Testing**: Optional test execution before PR creation
+## ✨ Features
 
-## Installation
+- **🎫 Task Tracker Integration**: Fetch tasks from JIRA or Linear with full context
+- **🤖 Claude Code Automation**: AI implements features with real-time streaming output
+- **💬 PR Feedback Loop**: Address reviewer feedback by continuing Claude sessions
+- **🔄 Automatic Test Retry**: Runs tests and asks Claude to fix failures (configurable retries)
+- **🌿 Git Worktrees**: Isolated execution environments prevent conflicts
+- **⚡ Parallel Processing**: Process multiple tickets concurrently
+- **📝 Smart PR Summaries**: Auto-generates structured PR descriptions with context
+- **🔧 Session Management**: View and continue previous Claude Code sessions
+- **🔐 Secure Storage**: Credentials stored safely in macOS Keychain
 
-### Via Mint (Recommended)
+## 📋 Table of Contents
+
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Commands](#commands)
+- [Configuration](#configuration)
+- [Workflows](#workflows)
+- [Development](#development)
+- [Contributing](#contributing)
+- [License](#license)
+
+## 🚀 Installation
+
+### Prerequisites
+
+- **macOS** 15.0+ or **Linux** (Ubuntu 20.04+, other distributions)
+  - macOS: Uses Keychain for secure credential storage
+  - Linux: Uses file-based storage in `~/.entrust/credentials/` with secure permissions
+- Swift 6.0+
+- [Claude Code](https://claude.ai/claude-code) installed (`claude --version`)
+- Git configured
+- JIRA or Linear account
+- GitHub account with `gh` CLI (optional, can use API tokens)
+
+### Via Mint (Recommended for macOS)
+
+[Mint](https://github.com/yonaskolb/Mint) is a package manager for Swift command-line tools.
 
 ```bash
-mint install username/entrust
+# Install Mint if you haven't already
+brew install mint
+
+# Install entrust
+mint install mfxstudios/entrust
 ```
 
-### Via Swift Package Manager
+### Build from Source (macOS & Linux)
 
-Add to your `Package.swift`:
-
-```swift
-dependencies: [
-    .package(url: "https://github.com/username/entrust.git", from: "2.0.0")
-]
-```
-
-### Build from Source
-
+**On macOS:**
 ```bash
-git clone https://github.com/username/entrust.git
+git clone https://github.com/mfxstudios/entrust.git
 cd entrust
 swift build -c release
 cp .build/release/entrust /usr/local/bin/
 ```
 
-## Quick Start
-
-### 1. Setup
-
+**On Linux:**
 ```bash
-# Interactive configuration
-entrust setup
+# Install Swift 6.0+ if not already installed
+# See: https://swift.org/download/
 
-# You'll be prompted for:
-# - Task tracker (jira/linear)
-# - GitHub repository
-# - Credentials (stored securely in Keychain)
+git clone https://github.com/mfxstudios/entrust.git
+cd entrust
+swift build -c release
+sudo cp .build/release/entrust /usr/local/bin/
 ```
 
-### 2. Run Automation
+### Verify Installation
 
 ```bash
-# Process a single task
+entrust --version
+entrust --help
+```
+
+## 🎯 Quick Start
+
+### 1. Initial Setup
+
+Configure your task tracker and GitHub credentials:
+
+```bash
+entrust setup
+```
+
+You'll be prompted for:
+- Task tracker type (jira/linear)
+- JIRA URL and email (if using JIRA)
+- GitHub repository (e.g., `myorg/myrepo`)
+- Base branch (default: `main`)
+- API tokens (stored securely in Keychain)
+
+### 2. Process a Single Task
+
+```bash
+# Fetch ticket IOS-1234, implement it with Claude, create PR
 entrust run IOS-1234
 
 # With options
 entrust run IOS-1234 --draft --skip-tests
+```
 
-# Process multiple tasks in parallel
+### 3. Process Multiple Tasks in Parallel
+
+```bash
+# Process 3 tickets concurrently
 entrust parallel IOS-1234 IOS-1235 IOS-1236
 
-# From a file (one ticket per line)
+# From a file with custom concurrency
 entrust parallel --file tickets.txt --max-concurrent 5
 ```
 
-## Commands
+### 4. Address PR Feedback
+
+When reviewers leave feedback on your PR:
+
+```bash
+# Address feedback on PR #456
+entrust feedback 456
+
+# Or using full URL
+entrust feedback https://github.com/myorg/myrepo/pull/456
+```
+
+## 📚 Commands
 
 ### `setup`
 
-Configure credentials and preferences.
+Configure task tracker and GitHub credentials.
 
 ```bash
 entrust setup          # Interactive configuration
-entrust setup --show   # Display current configuration
-entrust setup --clear  # Clear all stored configuration
+entrust setup --show   # Display current settings (tokens hidden)
+entrust setup --clear  # Clear all configuration and credentials
 ```
 
 ### `run`
 
-Process a single task from JIRA or Linear using an isolated git worktree.
+Process a single task using an isolated git worktree.
 
 ```bash
 entrust run <task-id> [options]
 
 Options:
-  --tracker <type>        Task tracker [jira/linear]
-  --repo <org/repo>       GitHub repository
-  --base-branch <branch>  Base branch (default: main)
   --draft                 Create PR as draft
   --skip-tests            Skip running tests
-  --dry-run               Show execution plan without running
-  --keep-worktree         Keep worktree after completion (for debugging)
+  --repo-root <path>      Repository root directory
 ```
 
-**How it works:**
-- Creates an isolated git worktree in `/tmp/entrust-<ticket>-<uuid>`
-- Runs Claude Code in the worktree to implement the feature
-- Tests, commits, and pushes changes from the worktree
-- Creates a pull request and updates the ticket status
-- Automatically cleans up the worktree (unless `--keep-worktree` is used)
+**Workflow:**
+1. Creates isolated worktree in `/tmp/entrust-<ticket>-<uuid>`
+2. Fetches task from JIRA/Linear
+3. Updates ticket status to "In Progress"
+4. Runs Claude Code with streaming output
+5. Runs tests with automatic retry on failure (up to 3 attempts)
+6. Commits and pushes changes
+7. Creates pull request with structured description
+8. Updates ticket status to "In Review"
+9. Cleans up worktree
 
 ### `parallel`
 
-Process multiple tasks concurrently using isolated git worktrees.
+Process multiple tasks concurrently using isolated worktrees.
 
 ```bash
 entrust parallel <task-id> [<task-id> ...] [options]
@@ -118,54 +179,114 @@ entrust parallel <task-id> [<task-id> ...] [options]
 Options:
   --file <path>           Read ticket IDs from file (one per line)
   --max-concurrent <n>    Maximum concurrent tasks (default: 3)
-  --tracker <type>        Task tracker [jira/linear]
-  --repo <org/repo>       GitHub repository
-  --base-branch <branch>  Base branch (default: main)
-  --draft                 Create PR as draft
+  --draft                 Create PRs as drafts
   --skip-tests            Skip running tests
-  --dry-run               Show execution plan without running
-  --keep-worktrees        Keep worktrees after completion (for debugging)
 ```
 
 **Examples:**
 
 ```bash
-# Process 3 tickets in parallel
+# Process specific tickets
 entrust parallel IOS-1234 IOS-1235 IOS-1236
 
-# Process tickets from a file with higher concurrency
+# Process from file with higher concurrency
 entrust parallel --file sprint-tickets.txt --max-concurrent 5
 
-# Preview what would be processed
-entrust parallel IOS-1234 IOS-1235 --dry-run
+# Create draft PRs for review
+entrust parallel IOS-1234 IOS-1235 --draft
+```
+
+### `feedback`
+
+Address PR feedback by continuing the Claude Code session.
+
+```bash
+entrust feedback <pr-number or url> [options]
+
+Options:
+  --repo-root <path>      Repository root directory
+  --all                   Process all comments (including previously processed)
 ```
 
 **How it works:**
-- Each ticket gets its own isolated git worktree in `/tmp/entrust-<ticket>-<uuid>`
-- Tasks are processed concurrently up to `--max-concurrent` limit
-- Each task runs Claude Code independently in its own worktree
-- Provides real-time progress output prefixed with `[ticket-id]`
-- Displays a summary report at the end with success/failure counts
-- Automatically cleans up all worktrees (unless `--keep-worktrees` is used)
+- Fetches PR comments from GitHub API
+- Filters actionable comments:
+  - All comments from "Request Changes" reviews
+  - Any comment containing `**entrust**` or `entrust:` trigger
+- Continues the original Claude Code session with feedback
+- Runs tests with automatic retry
+- Commits and pushes fixes
+- Tracks processed comments to avoid duplicates
+
+**Reviewer triggers:**
+
+```markdown
+<!-- In a PR review -->
+**entrust** please add error handling here
+
+<!-- Or with prefix -->
+entrust: refactor this to use async/await
+
+<!-- Or just mark review as "Request Changes" -->
+This needs better validation
+```
+
+### `continue`
+
+Continue a previous Claude Code session with additional instructions.
+
+```bash
+entrust continue <session-id or "latest"> <prompt>
+
+Options:
+  --working-directory <path>   Working directory for the session
+```
+
+**Examples:**
+
+```bash
+# Continue latest session
+entrust continue latest "Add documentation to the new functions"
+
+# Continue specific session
+entrust continue abc123def "Fix the failing test"
+```
+
+### `sessions`
+
+View Claude Code session history.
+
+```bash
+entrust sessions [options]
+
+Options:
+  --project <path>        Filter sessions by project path
+  --verbose               Show detailed session information
+  --limit <n>             Limit number of sessions to show
+```
 
 ### `status`
 
-Check configuration and credentials.
+Change ticket status manually.
 
 ```bash
-entrust status
+entrust status <ticket-id> <status>
+
+Example:
+  entrust status IOS-1234 "In Review"
 ```
 
-## Configuration
+## ⚙️ Configuration
 
 ### Configuration File
 
-Settings are stored in a `.env` file. The tool checks for `.env` in the current directory first, then falls back to `~/.entrust/.env`:
+Settings are stored in `.env` files. Priority order:
+1. `.env` in current directory (project-specific)
+2. `~/.entrust/.env` (global configuration)
 
-**Example for JIRA:**
+**Example `.env` for JIRA:**
+
 ```bash
-# entrust configuration
-
 # Task Tracker Settings
 TRACKER_TYPE=jira
 JIRA_URL=https://your-company.atlassian.net
@@ -182,12 +303,12 @@ AI_AGENT_TYPE=claude-code
 
 # Execution Settings
 RUN_TESTS_BY_DEFAULT=true
+MAX_RETRY_ATTEMPTS=3
 ```
 
-**Example for Linear:**
-```bash
-# entrust configuration
+**Example `.env` for Linear:**
 
+```bash
 # Task Tracker Settings
 TRACKER_TYPE=linear
 
@@ -202,110 +323,219 @@ AI_AGENT_TYPE=claude-code
 
 # Execution Settings
 RUN_TESTS_BY_DEFAULT=true
+MAX_RETRY_ATTEMPTS=3
 ```
 
-**Priority Order:**
-1. `.env` in current directory (project-specific configuration)
-2. `~/.entrust/.env` (global configuration)
+### Credentials (Keychain)
 
-This allows you to have project-specific settings that override your global defaults.
+API tokens are **never** stored in `.env` files. They're stored securely in macOS Keychain:
 
-### Credentials
-
-API tokens and credentials are **never** stored in `.env` files. They are stored securely in macOS Keychain:
 - **JIRA API token**: Required when `TRACKER_TYPE=jira`
 - **Linear API token**: Required when `TRACKER_TYPE=linear`
-- **GitHub personal access token**: Required when `USE_GH_CLI=false`
+- **GitHub token**: Required when `USE_GH_CLI=false`
 
-Run `entrust setup` to securely store your credentials in the Keychain.
+Run `entrust setup` to configure credentials securely.
 
-## Workflow
+### Test Retry Configuration
 
-### Single Task (`run`)
-
-When you run `entrust run IOS-1234`, the tool:
-
-1. **Creates** an isolated git worktree in `/tmp/entrust-IOS-1234-<uuid>`
-2. **Fetches** the task from JIRA/Linear
-3. **Updates** ticket status to "In Progress"
-4. **Creates** a feature branch (e.g., `feature/IOS-1234`)
-5. **Runs** Claude Code in the worktree: `claude -p "prompt"`
-6. **Tests** the implementation in the worktree (unless `--skip-tests`)
-7. **Commits** changes with descriptive message
-8. **Pushes** to GitHub
-9. **Creates** pull request
-10. **Updates** task status to "In Review"
-11. **Cleans up** the worktree (unless `--keep-worktree`)
-
-### Multiple Tasks (`parallel`)
-
-When you run `entrust parallel IOS-1234 IOS-1235 IOS-1236`, the tool:
-
-1. **Creates** isolated git worktrees for each ticket
-2. **Processes** up to `--max-concurrent` (default 3) tickets simultaneously
-3. **Each ticket** follows the same workflow as `run`, but in its own worktree
-4. **Displays** real-time progress for all running tasks
-5. **Prints** a summary report with success/failure counts and PR URLs
-6. **Cleans up** all worktrees (unless `--keep-worktrees`)
-
-### Why Worktrees?
-
-Git worktrees provide isolation between tasks:
-- **No conflicts**: Each task works in its own directory
-- **Clean state**: Fresh working directory per task
-- **Parallel safety**: Multiple Claude Code instances don't interfere
-- **Easy debugging**: Use `--keep-worktree` to inspect the state after execution
-
-
-## Claude Code
-
-This tool requires [Claude Code](https://claude.com/code) to be installed:
+Control automatic test retry behavior:
 
 ```bash
-# Check Claude Code is installed
-claude --version
+# In .env file
+MAX_RETRY_ATTEMPTS=3  # Default: 3, Range: 0-10
 
-# Claude Code runs with: claude -p "your prompt here"
-# It works directly in your repository, making changes autonomously
+# 0 = No retry (fail immediately)
+# 1 = Retry once
+# 3 = Retry up to 3 times (recommended)
 ```
 
-## Requirements
+## 🔄 Workflows
 
-- macOS 12.0+
-- Swift 6.0+
-- [Claude Code](https://claude.com/code) installed
-- Git configured
-- JIRA or Linear account
-- GitHub account
+### Single Task Workflow
 
-## Development
-
-### Running Tests
-
-```bash
-swift test
 ```
+entrust run IOS-1234
+    ↓
+[Create worktree] → /tmp/entrust-IOS-1234-abc123
+    ↓
+[Fetch task] → "Add user authentication"
+    ↓
+[Update status] → "In Progress"
+    ↓
+[Run Claude Code] → Streaming implementation
+    ↓
+[Run tests] → PASSED ✓
+    ↓
+[Commit & push] → feature/IOS-1234
+    ↓
+[Create PR] → github.com/org/repo/pull/456
+    ↓
+[Update status] → "In Review"
+    ↓
+[Cleanup worktree]
+```
+
+### Test Retry Workflow
+
+```
+[Run tests]
+    ↓
+FAILED ✗ → "Expected 200, got 404"
+    ↓
+[Attempt 1/3] → Continue Claude session with error
+    ↓
+Claude analyzes error and fixes code
+    ↓
+[Run tests again]
+    ↓
+FAILED ✗ → "Timeout on line 45"
+    ↓
+[Attempt 2/3] → Continue with new error
+    ↓
+Claude fixes timeout issue
+    ↓
+[Run tests again]
+    ↓
+PASSED ✓ → Tests succeed!
+```
+
+### PR Feedback Workflow
+
+```
+[PR #456 created]
+    ↓
+Reviewer adds feedback:
+  - "Request Changes" review with 3 comments
+  - General comment: "**entrust** add error handling"
+    ↓
+entrust feedback 456
+    ↓
+[Fetch PR comments] → 4 actionable comments
+    ↓
+[Load session] → abc123def (from PR metadata)
+    ↓
+[Recreate worktree] → feature/IOS-1234
+    ↓
+[Continue Claude session] → "Address the following feedback: ..."
+    ↓
+[Run tests] → PASSED ✓
+    ↓
+[Commit & push] → "[IOS-1234] Address PR feedback"
+    ↓
+[Mark comments processed] → Track IDs to avoid duplicates
+```
+
+### Parallel Workflow
+
+```
+entrust parallel IOS-1234 IOS-1235 IOS-1236 --max-concurrent 3
+    ↓
+[Create 3 worktrees in parallel]
+  ├─ /tmp/entrust-IOS-1234-abc
+  ├─ /tmp/entrust-IOS-1235-def
+  └─ /tmp/entrust-IOS-1236-ghi
+    ↓
+[Process concurrently]
+  ├─ [IOS-1234] Fetching... Running Claude... Testing... ✓
+  ├─ [IOS-1235] Fetching... Running Claude... Testing... ✓
+  └─ [IOS-1236] Fetching... Running Claude... Testing... ✓
+    ↓
+[Summary Report]
+  ✓ 3 succeeded
+  ✗ 0 failed
+  → 3 PRs created
+```
+
+## 🏗️ Architecture
 
 ### Project Structure
 
 ```
 Sources/entrust/
-├── AIAgent/              # Claude Code integration
-├── TaskTracker/          # JIRA & Linear integrations
-│   ├── JIRA/
-│   └── Linear/
-├── Managers/             # GitHub, Configuration, Keychain
-├── Subcommands/          # CLI commands (setup, run, parallel, status)
-├── Extensions/           # String sanitization, etc.
-└── TicketAutomation.swift  # Main workflow orchestration
+├── AIAgent/              # Claude Code SDK integration
+│   └── AIAgent.swift     # Streaming execution with AsyncSequence
+├── TaskTracker/          # Task management
+│   ├── JIRA/            # JIRA API integration
+│   └── Linear/          # Linear API integration
+├── Managers/            # Core services
+│   ├── GitHubService.swift       # PR creation, comments, worktrees
+│   ├── ConfigurationManager.swift # .env file management
+│   └── KeychainManager.swift     # Secure credential storage
+├── Storage/             # Session persistence
+│   └── PRSessionStorage.swift    # PR/session mapping
+├── Subcommands/         # CLI commands
+│   ├── Run.swift
+│   ├── Parallel.swift
+│   ├── Feedback.swift   # NEW: PR feedback handling
+│   ├── Continue.swift
+│   ├── Sessions.swift
+│   ├── Setup.swift
+│   └── Status.swift
+└── TicketAutomation.swift        # Main workflow orchestration
 ```
 
-## License
+### Key Components
 
-MIT License - see LICENSE file for details
+**Claude Code Integration:**
+- Uses [claude-code-sdk-swift](https://github.com/mfxstudios/claude-code-sdk-swift)
+- Real-time streaming output with AsyncSequence
+- Automatic backend detection (Agent SDK or Headless)
+- Session management for conversation continuation
 
-## Acknowledgments
+**Git Worktrees:**
+- Isolated execution in `/tmp/entrust-<ticket>-<uuid>`
+- No conflicts between parallel tasks
+- Clean state for each task
+- Easy debugging with `--keep-worktree`
 
-- Inspired by [claude-intern](https://github.com/danii1/claude-intern)
-- Built with [Swift Argument Parser](https://github.com/apple/swift-argument-parser)
-- Powered by [Claude Code](https://claude.com/code)
+**Test Retry System:**
+- Configurable retry attempts (0-10)
+- Multi-turn conversation with Claude
+- Provides error context on each retry
+- Automatic cleanup on success
+
+**PR Feedback System:**
+- Session ID stored in PR description (HTML comment)
+- Local session database (`~/.entrust/pr-sessions.json`)
+- Comment filtering with triggers
+- Tracks processed comments to avoid duplicates
+
+## 🧪 Development
+
+### Running Tests
+
+```bash
+swift test                    # Run all tests
+swift test --parallel         # Run tests in parallel
+```
+
+**Test Coverage:**
+- 142 tests across 66 test suites
+- Unit tests for all core functionality
+- BDD-style tests with Given/When/Then naming
+- Tests for PR feedback filtering, session storage, and streaming
+
+### Building
+
+```bash
+swift build                   # Debug build
+swift build -c release        # Release build
+```
+
+### Testing Locally
+
+```bash
+# Build and run
+swift build
+.build/debug/entrust --help
+
+# Test with a real ticket
+.build/debug/entrust run TEST-123 --skip-tests
+
+# Install locally with Mint (for testing installation)
+mint install . --force
+```
+
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) file for details.
