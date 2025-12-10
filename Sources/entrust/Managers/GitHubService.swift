@@ -38,6 +38,26 @@ struct PullRequestResult: Sendable {
     let number: Int?
 }
 
+/// Pull request details
+struct PullRequest: Sendable {
+    let number: Int
+    let title: String
+    let body: String
+    let headBranch: String
+    let baseBranch: String
+    let state: String
+}
+
+/// Pull request comment
+struct PRComment: Sendable {
+    let id: Int
+    let body: String
+    let author: String
+    let path: String?
+    let line: Int?
+    let isFromRequestChangesReview: Bool
+}
+
 /// Protocol for GitHub operations - enables testing and alternative implementations
 protocol GitHubServiceProtocol: Sendable {
     var configuration: GitHubConfiguration { get }
@@ -46,6 +66,8 @@ protocol GitHubServiceProtocol: Sendable {
     func createBranch(name: String, from baseBranch: String, in workingDirectory: String?) async throws
     func commitAndPush(message: String, branch: String, in workingDirectory: String?) async throws -> Bool
     func fetchLatest(branch: String, in workingDirectory: String?) async throws
+    func fetchPullRequest(_ number: Int) async throws -> PullRequest
+    func fetchPRComments(_ number: Int) async throws -> [PRComment]
 }
 
 /// GitHub service implementation using either GitHub CLI or REST API
@@ -126,6 +148,197 @@ struct GitHubService: GitHubServiceProtocol, Sendable {
         return PullRequestResult(url: url, number: number)
     }
 
+    func fetchPullRequest(_ number: Int) async throws -> PullRequest {
+        if configuration.useGHCLI {
+            return try await fetchPRWithGHCLI(number)
+        } else {
+            return try await fetchPRWithAPI(number)
+        }
+    }
+
+    private func fetchPRWithGHCLI(_ number: Int) async throws -> PullRequest {
+        let output = try await Shell.run([
+            "gh", "pr", "view", "\(number)",
+            "--repo", configuration.repo,
+            "--json", "number,title,body,headRefName,baseRefName,state"
+        ])
+
+        guard let data = output.data(using: .utf8),
+              let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw AutomationError.shellCommandFailed("Failed to parse PR data")
+        }
+
+        return PullRequest(
+            number: json["number"] as? Int ?? number,
+            title: json["title"] as? String ?? "",
+            body: json["body"] as? String ?? "",
+            headBranch: json["headRefName"] as? String ?? "",
+            baseBranch: json["baseRefName"] as? String ?? "",
+            state: json["state"] as? String ?? ""
+        )
+    }
+
+    private func fetchPRWithAPI(_ number: Int) async throws -> PullRequest {
+        guard let token = configuration.token else {
+            throw AutomationError.missingGitHubToken
+        }
+
+        var request = URLRequest(
+            url: URL(string: "https://api.github.com/repos/\(configuration.repo)/pulls/\(number)")!
+        )
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw AutomationError.shellCommandFailed("Failed to fetch PR")
+        }
+
+        let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        let head = json["head"] as! [String: Any]
+        let base = json["base"] as! [String: Any]
+
+        return PullRequest(
+            number: json["number"] as? Int ?? number,
+            title: json["title"] as? String ?? "",
+            body: json["body"] as? String ?? "",
+            headBranch: head["ref"] as? String ?? "",
+            baseBranch: base["ref"] as? String ?? "",
+            state: json["state"] as? String ?? ""
+        )
+    }
+
+    func fetchPRComments(_ number: Int) async throws -> [PRComment] {
+        if configuration.useGHCLI {
+            return try await fetchCommentsWithGHCLI(number)
+        } else {
+            return try await fetchCommentsWithAPI(number)
+        }
+    }
+
+    private func fetchCommentsWithGHCLI(_ number: Int) async throws -> [PRComment] {
+        // Fetch review comments (inline code comments)
+        let reviewCommentsOutput = try await Shell.run([
+            "gh", "api",
+            "/repos/\(configuration.repo)/pulls/\(number)/comments",
+            "--jq", """
+            .[] | {
+                id: .id,
+                body: .body,
+                author: .user.login,
+                path: .path,
+                line: .line,
+                commit_id: .commit_id
+            }
+            """
+        ])
+
+        // Fetch reviews to determine which comments are from "Request Changes" reviews
+        let reviewsOutput = try await Shell.run([
+            "gh", "api",
+            "/repos/\(configuration.repo)/pulls/\(number)/reviews",
+            "--jq", """
+            .[] | select(.state == "CHANGES_REQUESTED") | {
+                id: .id,
+                commit_id: .commit_id
+            }
+            """
+        ])
+
+        // Parse review comments
+        var comments: [PRComment] = []
+        let reviewCommentLines = reviewCommentsOutput.split(separator: "\n")
+
+        // Build set of commit IDs from "Request Changes" reviews
+        var requestChangesCommitIDs = Set<String>()
+        let reviewLines = reviewsOutput.split(separator: "\n")
+        for line in reviewLines {
+            if let data = line.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let commitID = json["commit_id"] as? String {
+                requestChangesCommitIDs.insert(commitID)
+            }
+        }
+
+        for line in reviewCommentLines {
+            if let data = line.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+
+                let commitID = json["commit_id"] as? String ?? ""
+                let isFromRequestChanges = requestChangesCommitIDs.contains(commitID)
+
+                comments.append(PRComment(
+                    id: json["id"] as? Int ?? 0,
+                    body: json["body"] as? String ?? "",
+                    author: json["author"] as? String ?? "",
+                    path: json["path"] as? String,
+                    line: json["line"] as? Int,
+                    isFromRequestChangesReview: isFromRequestChanges
+                ))
+            }
+        }
+
+        return comments
+    }
+
+    private func fetchCommentsWithAPI(_ number: Int) async throws -> [PRComment] {
+        guard let token = configuration.token else {
+            throw AutomationError.missingGitHubToken
+        }
+
+        // Fetch review comments
+        var request = URLRequest(
+            url: URL(string: "https://api.github.com/repos/\(configuration.repo)/pulls/\(number)/comments")!
+        )
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+
+        let (commentsData, _) = try await URLSession.shared.data(for: request)
+        let commentsJSON = try JSONSerialization.jsonObject(with: commentsData) as! [[String: Any]]
+
+        // Fetch reviews to determine "Request Changes" state
+        var reviewsRequest = URLRequest(
+            url: URL(string: "https://api.github.com/repos/\(configuration.repo)/pulls/\(number)/reviews")!
+        )
+        reviewsRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        reviewsRequest.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+
+        let (reviewsData, _) = try await URLSession.shared.data(for: reviewsRequest)
+        let reviewsJSON = try JSONSerialization.jsonObject(with: reviewsData) as! [[String: Any]]
+
+        // Build set of commit IDs from "Request Changes" reviews
+        var requestChangesCommitIDs = Set<String>()
+        for review in reviewsJSON {
+            if let state = review["state"] as? String,
+               state == "CHANGES_REQUESTED",
+               let commitID = review["commit_id"] as? String {
+                requestChangesCommitIDs.insert(commitID)
+            }
+        }
+
+        // Parse comments
+        var comments: [PRComment] = []
+        for commentJSON in commentsJSON {
+            let commitID = commentJSON["commit_id"] as? String ?? ""
+            let isFromRequestChanges = requestChangesCommitIDs.contains(commitID)
+
+            let user = commentJSON["user"] as? [String: Any]
+
+            comments.append(PRComment(
+                id: commentJSON["id"] as? Int ?? 0,
+                body: commentJSON["body"] as? String ?? "",
+                author: user?["login"] as? String ?? "",
+                path: commentJSON["path"] as? String,
+                line: commentJSON["line"] as? Int,
+                isFromRequestChangesReview: isFromRequestChanges
+            ))
+        }
+
+        return comments
+    }
+
     // MARK: - Branch Operations
 
     func createBranch(name: String, from baseBranch: String, in workingDirectory: String? = nil) async throws {
@@ -176,14 +389,26 @@ struct GitHubService: GitHubServiceProtocol, Sendable {
     func createWorktree(
         path: String,
         branch: String,
-        baseBranch: String,
+        baseBranch: String?,
         in repoRoot: String
     ) async throws {
-        try await fetchLatest(branch: baseBranch, in: repoRoot)
-        try await Shell.run([
-            "git", "-C", repoRoot, "worktree", "add",
-            path, "-b", branch, "origin/\(baseBranch)"
-        ])
+        if let baseBranch = baseBranch {
+            // Create new branch from base branch
+            try await fetchLatest(branch: baseBranch, in: repoRoot)
+            try await Shell.run([
+                "git", "-C", repoRoot, "worktree", "add",
+                path, "-b", branch, "origin/\(baseBranch)"
+            ])
+        } else {
+            // Checkout existing branch
+            try await Shell.run([
+                "git", "-C", repoRoot, "fetch", "origin", branch
+            ])
+            try await Shell.run([
+                "git", "-C", repoRoot, "worktree", "add",
+                path, branch
+            ])
+        }
     }
 
     func removeWorktree(path: String, in repoRoot: String) async throws {

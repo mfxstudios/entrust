@@ -79,7 +79,7 @@ enum AIAgentType: String, Codable, CaseIterable, Sendable {
     }
 
     var additionalArgs: [String] {
-        return ["-p"]  // Headless print mode
+        return ["-p", ""]  // Headless print mode
     }
 }
 
@@ -122,6 +122,7 @@ struct ClaudeCodeAgent: AIAgent, Sendable {
         var options = ClaudeCodeOptions()
         options.verbose = true
         options.timeout = context.timeout
+        options.permissionMode = .bypassPermissions
         options.appendSystemPrompt = """
         When you're done implementing the changes:
         1. Verify all files compile without errors

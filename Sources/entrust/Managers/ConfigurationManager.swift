@@ -19,6 +19,10 @@ struct Configuration: Codable {
     let runTestsByDefault: Bool
     let maxRetryAttempts: Int
 
+    // Xcode-specific settings
+    let xcodeScheme: String?
+    let xcodeDestination: String?
+
     // Coding guidelines for custom init with defaults
     init(
         trackerType: String,
@@ -30,7 +34,9 @@ struct Configuration: Codable {
         autoCreateDraft: Bool,
         aiAgentType: String? = "claude-code",
         runTestsByDefault: Bool,
-        maxRetryAttempts: Int = 3
+        maxRetryAttempts: Int = 3,
+        xcodeScheme: String? = nil,
+        xcodeDestination: String? = nil
     ) {
         self.trackerType = trackerType
         self.jiraURL = jiraURL
@@ -42,6 +48,8 @@ struct Configuration: Codable {
         self.aiAgentType = aiAgentType
         self.runTestsByDefault = runTestsByDefault
         self.maxRetryAttempts = maxRetryAttempts
+        self.xcodeScheme = xcodeScheme
+        self.xcodeDestination = xcodeDestination
     }
 
     /// Get the configured AI agent
@@ -113,6 +121,15 @@ enum ConfigurationManager {
         lines.append("# Execution Settings")
         lines.append("RUN_TESTS_BY_DEFAULT=\(config.runTestsByDefault)")
         lines.append("MAX_RETRY_ATTEMPTS=\(config.maxRetryAttempts)")
+        lines.append("")
+
+        lines.append("# Xcode Settings (optional)")
+        if let xcodeScheme = config.xcodeScheme {
+            lines.append("XCODE_SCHEME=\(xcodeScheme)")
+        }
+        if let xcodeDestination = config.xcodeDestination {
+            lines.append("XCODE_DESTINATION=\(xcodeDestination)")
+        }
 
         let content = lines.joined(separator: "\n") + "\n"
         try content.write(to: configPath, atomically: true, encoding: .utf8)
@@ -169,7 +186,9 @@ enum ConfigurationManager {
             autoCreateDraft: autoCreateDraft,
             aiAgentType: env["AI_AGENT_TYPE"],
             runTestsByDefault: runTestsByDefault,
-            maxRetryAttempts: maxRetryAttempts
+            maxRetryAttempts: maxRetryAttempts,
+            xcodeScheme: env["XCODE_SCHEME"],
+            xcodeDestination: env["XCODE_DESTINATION"]
         )
     }
 

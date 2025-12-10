@@ -12,6 +12,7 @@ struct Entrust: AsyncParsableCommand {
             Run.self,
             Parallel.self,
             Continue.self,
+            Feedback.self,
             Sessions.self,
             Status.self
         ],

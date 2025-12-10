@@ -138,6 +138,68 @@ struct GitHubServiceTests {
             }
         }
     }
+
+    // MARK: - PR and Comment Model Tests
+
+    @Suite("Given pull request models")
+    struct PullRequestModelTests {
+
+        @Test("When creating PullRequest, Then all fields are set")
+        func createPullRequest() {
+            let pr = PullRequest(
+                number: 42,
+                title: "[JIRA-123] Fix bug",
+                body: "This fixes the bug",
+                headBranch: "feature/JIRA-123",
+                baseBranch: "main",
+                state: "open"
+            )
+
+            #expect(pr.number == 42)
+            #expect(pr.title == "[JIRA-123] Fix bug")
+            #expect(pr.body == "This fixes the bug")
+            #expect(pr.headBranch == "feature/JIRA-123")
+            #expect(pr.baseBranch == "main")
+            #expect(pr.state == "open")
+        }
+
+        @Test("When creating PRComment from request changes review, Then flag is set")
+        func createCommentFromRequestChanges() {
+            let comment = PRComment(
+                id: 101,
+                body: "This needs to be fixed",
+                author: "reviewer",
+                path: "src/File.swift",
+                line: 42,
+                isFromRequestChangesReview: true
+            )
+
+            #expect(comment.id == 101)
+            #expect(comment.body == "This needs to be fixed")
+            #expect(comment.author == "reviewer")
+            #expect(comment.path == "src/File.swift")
+            #expect(comment.line == 42)
+            #expect(comment.isFromRequestChangesReview == true)
+        }
+
+        @Test("When creating general comment, Then path and line are nil")
+        func createGeneralComment() {
+            let comment = PRComment(
+                id: 202,
+                body: "**entrust** please add tests",
+                author: "reviewer",
+                path: nil,
+                line: nil,
+                isFromRequestChangesReview: false
+            )
+
+            #expect(comment.id == 202)
+            #expect(comment.body.contains("**entrust**"))
+            #expect(comment.path == nil)
+            #expect(comment.line == nil)
+            #expect(comment.isFromRequestChangesReview == false)
+        }
+    }
 }
 
 // MARK: - Shell Tests

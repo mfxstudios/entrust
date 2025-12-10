@@ -106,7 +106,9 @@ struct Run: AsyncParsableCommand {
             aiAgent: agent,
             skipTests: effectiveSkipTests,
             draft: effectiveDraft,
-            maxRetryAttempts: config.maxRetryAttempts
+            maxRetryAttempts: config.maxRetryAttempts,
+            xcodeScheme: config.xcodeScheme,
+            xcodeDestination: config.xcodeDestination
         )
 
         try await automation.execute()

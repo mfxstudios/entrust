@@ -70,6 +70,14 @@ struct Setup: AsyncParsableCommand {
         let autoCreateDraft = readInput("Create draft PRs by default? [y/n]: ").lowercased() == "y"
         let runTestsByDefault = readInput("Run tests by default? [y/n]: ", default: "y").lowercased() == "y"
 
+        // Xcode Settings (optional)
+        print("\n🏗️  Xcode Settings (optional - leave blank if not using Xcode)")
+        let xcodeSchemeInput = readInput("Xcode scheme name (for running tests): ", default: "")
+        let xcodeScheme = xcodeSchemeInput.isEmpty ? nil : xcodeSchemeInput
+
+        let xcodeDestinationInput = readInput("Xcode test destination [platform=iOS Simulator,name=iPhone 15]: ", default: "platform=iOS Simulator,name=iPhone 15")
+        let xcodeDestination = (xcodeScheme != nil && !xcodeDestinationInput.isEmpty) ? xcodeDestinationInput : nil
+
         // Build configuration
         let config = Configuration(
             trackerType: trackerType,
@@ -80,7 +88,9 @@ struct Setup: AsyncParsableCommand {
             useGHCLI: useGHCLI,
             autoCreateDraft: autoCreateDraft,
             aiAgentType: aiAgentType,
-            runTestsByDefault: runTestsByDefault
+            runTestsByDefault: runTestsByDefault,
+            xcodeScheme: xcodeScheme,
+            xcodeDestination: xcodeDestination
         )
 
         // Save to keychain and config file
@@ -144,6 +154,14 @@ struct Setup: AsyncParsableCommand {
         print("Use GitHub CLI:     \(config.useGHCLI ? "Yes" : "No")")
         print("Draft PRs:          \(config.autoCreateDraft ? "Yes" : "No")")
         print("Run Tests:          \(config.runTestsByDefault ? "Yes" : "No")")
+
+        if let xcodeScheme = config.xcodeScheme {
+            print("\n🏗️  Xcode Settings")
+            print("Scheme:             \(xcodeScheme)")
+            if let xcodeDestination = config.xcodeDestination {
+                print("Destination:        \(xcodeDestination)")
+            }
+        }
 
         print("\n🤖 AI Agent")
         print("Agent:              Claude Code")

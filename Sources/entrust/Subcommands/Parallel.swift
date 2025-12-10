@@ -129,7 +129,9 @@ struct Parallel: AsyncParsableCommand {
             githubConfig: githubConfig,
             aiAgent: aiAgent,
             skipTests: effectiveSkipTests,
-            maxConcurrent: maxConcurrent
+            maxConcurrent: maxConcurrent,
+            xcodeScheme: config.xcodeScheme,
+            xcodeDestination: config.xcodeDestination
         )
 
         try await executor.execute()
@@ -146,6 +148,8 @@ actor ParallelExecutor {
     nonisolated let aiAgent: any AIAgent
     let skipTests: Bool
     let maxConcurrent: Int
+    let xcodeScheme: String?
+    let xcodeDestination: String?
 
     private var results: [String: TaskResult] = [:]
     private var worktrees: [String] = []
@@ -157,7 +161,9 @@ actor ParallelExecutor {
         githubConfig: GitHubConfiguration,
         aiAgent: any AIAgent,
         skipTests: Bool,
-        maxConcurrent: Int
+        maxConcurrent: Int,
+        xcodeScheme: String? = nil,
+        xcodeDestination: String? = nil
     ) {
         self.tickets = tickets
         self.repoRoot = repoRoot
@@ -166,6 +172,8 @@ actor ParallelExecutor {
         self.aiAgent = aiAgent
         self.skipTests = skipTests
         self.maxConcurrent = maxConcurrent
+        self.xcodeScheme = xcodeScheme
+        self.xcodeDestination = xcodeDestination
     }
 
     func execute() async throws {
@@ -297,15 +305,35 @@ actor ParallelExecutor {
 
             // Create PR
             print("[\(ticketID)] 📬 Creating pull request...")
+            var prBody = buildPRBody(issue: issue, agentOutput: agentResult.output)
+
+            // Add session ID to PR body if available
+            if let sessionId = agentResult.sessionId {
+                prBody += PRSessionStorage.generatePRDescriptionFooter(sessionId: sessionId)
+            }
+
             let prResult = try await githubService.createPullRequest(
                 PullRequestParams(
                     title: "[\(ticketID)] \(issue.title)",
-                    body: buildPRBody(issue: issue, agentOutput: agentResult.output),
+                    body: prBody,
                     branch: branch,
                     baseBranch: githubConfig.baseBranch,
                     draft: githubConfig.draft
                 )
             )
+
+            // Save session info for feedback continuation
+            if let sessionId = agentResult.sessionId {
+                print("[\(ticketID)] 💾 Saving session data...")
+                let storage = PRSessionStorage()
+                let sessionInfo = PRSessionInfo(
+                    sessionId: sessionId,
+                    ticketId: ticketID,
+                    branch: branch,
+                    skipTests: skipTests
+                )
+                try storage.save(prURL: prResult.url, sessionInfo: sessionInfo)
+            }
 
             // Update issue
             print("[\(ticketID)] ✅ Updating issue...")
@@ -376,16 +404,44 @@ actor ParallelExecutor {
             // Xcode workspace
             let workspace = xcodeWorkspaces[0]
             print("🏗️  Detected Xcode workspace: \(workspace)")
-            print("⚠️  Skipping tests - Xcode workspace testing requires specific scheme configuration")
-            print("   To enable, configure your project with a test scheme and update this command")
-            // Could run: xcodebuild test -workspace "\(workspace)" -scheme "<scheme>" -destination "platform=iOS Simulator,name=iPhone 15"
+
+            if let scheme = xcodeScheme {
+                let destination = xcodeDestination ?? "platform=iOS Simulator,name=iPhone 15"
+                print("🧪 Running tests with scheme: \(scheme)")
+
+                let output = try await Shell.run(
+                    ["xcodebuild", "test", "-workspace", workspace, "-scheme", scheme, "-destination", destination],
+                    workingDirectory: worktreePath
+                )
+
+                if output.contains("** TEST FAILED **") || output.contains("error:") {
+                    throw AutomationError.testsFailed
+                }
+            } else {
+                print("⚠️  Skipping tests - No XCODE_SCHEME configured")
+                print("   Run 'entrust setup' and provide a scheme, or add XCODE_SCHEME to your .env file")
+            }
         } else if !xcodeProjects.isEmpty {
             // Xcode project
             let project = xcodeProjects[0]
             print("🏗️  Detected Xcode project: \(project)")
-            print("⚠️  Skipping tests - Xcode project testing requires specific scheme configuration")
-            print("   To enable, configure your project with a test scheme and update this command")
-            // Could run: xcodebuild test -project "\(project)" -scheme "<scheme>" -destination "platform=iOS Simulator,name=iPhone 15"
+
+            if let scheme = xcodeScheme {
+                let destination = xcodeDestination ?? "platform=iOS Simulator,name=iPhone 15"
+                print("🧪 Running tests with scheme: \(scheme)")
+
+                let output = try await Shell.run(
+                    ["xcodebuild", "test", "-project", project, "-scheme", scheme, "-destination", destination],
+                    workingDirectory: worktreePath
+                )
+
+                if output.contains("** TEST FAILED **") || output.contains("error:") {
+                    throw AutomationError.testsFailed
+                }
+            } else {
+                print("⚠️  Skipping tests - No XCODE_SCHEME configured")
+                print("   Run 'entrust setup' and provide a scheme, or add XCODE_SCHEME to your .env file")
+            }
         } else {
             print("⚠️  No recognizable project structure found")
             print("📂 Worktree contents:")
