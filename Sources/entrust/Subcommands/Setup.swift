@@ -41,8 +41,8 @@ struct Setup: AsyncParsableCommand {
         var linearToken: String?
 
         if trackerType == "jira" {
-            jiraURL = readInput("JIRA URL (e.g., https://your-org.atlassian.net): ")
-            jiraEmail = readInput("JIRA Email: ")
+            jiraURL = readInput("JIRA URL (e.g., https://your-org.atlassian.net): ", required: true)
+            jiraEmail = readInput("JIRA Email: ", required: true)
             jiraToken = readSecureInput("JIRA API Token: ")
         } else if trackerType == "linear" {
             linearToken = readSecureInput("Linear API Token: ")
@@ -60,15 +60,16 @@ struct Setup: AsyncParsableCommand {
         // Auto-detect repository from git remote
         let detectedRepo = detectGitHubRepo()
         let repoPrompt: String
+        let repoDefault: String
         if let detected = detectedRepo {
             repoPrompt = "Default repository (org/repo) [\(detected)]: "
+            repoDefault = detected
         } else {
             repoPrompt = "Default repository (org/repo): "
+            repoDefault = ""
         }
 
-        let repoInput = readInput(repoPrompt, default: detectedRepo ?? "")
-        let repo = repoInput.isEmpty ? (detectedRepo ?? "") : repoInput
-
+        let repo = readInput(repoPrompt, default: repoDefault, required: true)
         let baseBranch = readInput("Default base branch [main]: ", default: "main")
 
         // AI Agent Configuration
@@ -105,47 +106,76 @@ struct Setup: AsyncParsableCommand {
         )
 
         // Save to keychain and config file
+        print("\n💾 Saving configuration...")
         try saveConfiguration(config)
+        print("   ✓ Configuration file saved to: \(FileManager.default.currentDirectoryPath)/.env")
 
         if let jiraToken = jiraToken {
             try KeychainManager.save(jiraToken, for: .jiraToken)
+            print("   ✓ JIRA token saved to keychain")
         }
 
         if let linearToken = linearToken {
             try KeychainManager.save(linearToken, for: .linearToken)
+            print("   ✓ Linear token saved to keychain")
         }
 
         if let githubToken = githubToken {
             try KeychainManager.save(githubToken, for: .githubToken)
+            print("   ✓ GitHub token saved to keychain")
         }
 
         print("\n✅ Configuration saved successfully!")
+        print("📂 Working directory: \(FileManager.default.currentDirectoryPath)")
         print("\n💡 Tip: Run 'entrust setup --show' to view your configuration")
+        print("⚠️  Remember to add .env and .entrust/ to your .gitignore")
     }
 
-    func readInput(_ prompt: String, default defaultValue: String = "") -> String {
-        print(prompt, terminator: "")
-        if let input = readLine()?.trimmingCharacters(in: .whitespaces), !input.isEmpty {
-            return input
+    func readInput(_ prompt: String, default defaultValue: String = "", required: Bool = false) -> String {
+        while true {
+            print(prompt, terminator: "")
+            if let input = readLine()?.trimmingCharacters(in: .whitespaces), !input.isEmpty {
+                return input
+            }
+
+            // If empty and has default, return default
+            if !defaultValue.isEmpty {
+                return defaultValue
+            }
+
+            // If empty and not required, return empty
+            if !required {
+                return ""
+            }
+
+            // If empty but required, prompt again
+            print("❌ This field is required. Please enter a value.")
         }
-        return defaultValue
     }
 
-    func readSecureInput(_ prompt: String) -> String {
-        print(prompt, terminator: "")
+    func readSecureInput(_ prompt: String, allowEmpty: Bool = false) -> String {
+        while true {
+            print(prompt, terminator: "")
 
-        var oldt = termios()
-        tcgetattr(STDIN_FILENO, &oldt)
-        var newt = oldt
-        newt.c_lflag &= ~UInt(ECHO)
-        tcsetattr(STDIN_FILENO, TCSANOW, &newt)
+            var oldt = termios()
+            tcgetattr(STDIN_FILENO, &oldt)
+            var newt = oldt
+            newt.c_lflag &= ~UInt(ECHO)
+            tcsetattr(STDIN_FILENO, TCSANOW, &newt)
 
-        defer {
+            let input = readLine() ?? ""
+
+            // Restore terminal settings
             tcsetattr(STDIN_FILENO, TCSANOW, &oldt)
             print()
-        }
 
-        return readLine() ?? ""
+            if !input.isEmpty || allowEmpty {
+                return input
+            }
+
+            // Token was empty, prompt again
+            print("❌ Token cannot be empty. Please enter a valid token.")
+        }
     }
 
     func showConfiguration() throws {

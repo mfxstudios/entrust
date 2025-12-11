@@ -1,6 +1,6 @@
 import Foundation
 
-enum AutomationError: LocalizedError {
+enum AutomationError: LocalizedError, Equatable {
     case configurationNotFound
     case invalidTrackerType
     case missingJIRAConfiguration
@@ -47,7 +47,15 @@ enum AutomationError: LocalizedError {
         case .keychainSaveFailed(let key):
             return "Failed to save \(key) to keychain"
         case .keychainLoadFailed(let key):
-            return "Failed to load \(key) from keychain. Run 'entrust setup' first."
+            let currentDir = FileManager.default.currentDirectoryPath
+            return """
+            Failed to load \(key) from keychain.
+
+            Current directory: \(currentDir)
+
+            Make sure you ran 'entrust setup' in this exact directory.
+            Configuration is project-specific based on the current working directory.
+            """
         case .keychainDeleteFailed(let key):
             return "Failed to delete \(key) from keychain"
         case .missingGitHubToken:
