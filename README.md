@@ -137,6 +137,11 @@ entrust setup --show   # Display current settings (tokens hidden)
 entrust setup --clear  # Clear all configuration and credentials
 ```
 
+**Auto-detection:**
+- When run from a git repository, `setup` automatically detects the GitHub org/repo from the `origin` remote
+- Supports both SSH (`git@github.com:org/repo.git`) and HTTPS (`https://github.com/org/repo.git`) formats
+- Simply press Enter to accept the detected value, or type a different org/repo to override
+
 ### `run`
 
 Process a single task using an isolated git worktree.

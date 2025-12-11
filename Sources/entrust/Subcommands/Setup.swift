@@ -57,7 +57,18 @@ struct Setup: AsyncParsableCommand {
             githubToken = readSecureInput("GitHub Personal Access Token: ")
         }
 
-        let repo = readInput("Default repository (org/repo): ")
+        // Auto-detect repository from git remote
+        let detectedRepo = detectGitHubRepo()
+        let repoPrompt: String
+        if let detected = detectedRepo {
+            repoPrompt = "Default repository (org/repo) [\(detected)]: "
+        } else {
+            repoPrompt = "Default repository (org/repo): "
+        }
+
+        let repoInput = readInput(repoPrompt, default: detectedRepo ?? "")
+        let repo = repoInput.isEmpty ? (detectedRepo ?? "") : repoInput
+
         let baseBranch = readInput("Default base branch [main]: ", default: "main")
 
         // AI Agent Configuration
@@ -187,5 +198,64 @@ struct Setup: AsyncParsableCommand {
 
     func saveConfiguration(_ config: Configuration) throws {
         try ConfigurationManager.save(config)
+    }
+
+    /// Auto-detect GitHub org/repo from current git repository
+    func detectGitHubRepo() -> String? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = ["git", "config", "--get", "remote.origin.url"]
+
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = Pipe()
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+
+            guard process.terminationStatus == 0 else {
+                return nil
+            }
+
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            guard let remoteURL = String(data: data, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+                  !remoteURL.isEmpty else {
+                return nil
+            }
+
+            // Parse the URL to extract org/repo
+            return parseGitHubURL(remoteURL)
+        } catch {
+            return nil
+        }
+    }
+
+    /// Parse GitHub URL to extract org/repo
+    /// Supports both HTTPS and SSH formats:
+    /// - https://github.com/org/repo.git
+    /// - git@github.com:org/repo.git
+    func parseGitHubURL(_ url: String) -> String? {
+        // Remove .git suffix if present
+        let cleanURL = url.hasSuffix(".git") ? String(url.dropLast(4)) : url
+
+        // HTTPS format: https://github.com/org/repo
+        if cleanURL.contains("https://github.com/") {
+            let components = cleanURL.components(separatedBy: "https://github.com/")
+            if components.count > 1 {
+                return components[1]
+            }
+        }
+
+        // SSH format: git@github.com:org/repo
+        if cleanURL.contains("git@github.com:") {
+            let components = cleanURL.components(separatedBy: "git@github.com:")
+            if components.count > 1 {
+                return components[1]
+            }
+        }
+
+        return nil
     }
 }
