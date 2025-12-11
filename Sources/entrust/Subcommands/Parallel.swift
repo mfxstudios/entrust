@@ -42,6 +42,9 @@ struct Parallel: AsyncParsableCommand {
     @Flag(name: .long, help: "Run each ticket in a separate terminal window")
     var newTerminal: Bool = false
 
+    @Flag(name: .long, help: "Interactive mode - guide Claude through implementation (auto-enables --new-terminal)")
+    var interactive: Bool = false
+
     func run() async throws {
         let config = try ConfigurationManager.load()
 
@@ -73,11 +76,12 @@ struct Parallel: AsyncParsableCommand {
         let effectiveUseGHCLI = useGHCLI || config.useGHCLI
         let effectiveSkipTests = skipTests || !config.runTestsByDefault
         let effectiveDraft = draft || config.autoCreateDraft
-        let effectiveNewTerminal = newTerminal || config.useNewTerminal
+        // Auto-enable new terminal if interactive mode is requested
+        let effectiveNewTerminal = interactive || newTerminal || config.useNewTerminal
 
         // If new terminal is requested, launch each ticket in a separate terminal
         if effectiveNewTerminal {
-            try await launchInNewTerminals(tickets: allTickets)
+            try await launchInNewTerminals(tickets: allTickets, interactive: interactive)
             return
         }
 
@@ -148,8 +152,9 @@ struct Parallel: AsyncParsableCommand {
     }
 
     /// Launch each ticket in a separate terminal window
-    private func launchInNewTerminals(tickets: [String]) async throws {
-        print("🚀 Launching \(tickets.count) ticket(s) in separate terminal windows...")
+    private func launchInNewTerminals(tickets: [String], interactive: Bool) async throws {
+        let mode = interactive ? "interactive mode" : "automated mode"
+        print("🚀 Launching \(tickets.count) ticket(s) in separate terminal windows (\(mode))...")
         print("")
 
         // Get the path to entrust binary
@@ -183,6 +188,9 @@ struct Parallel: AsyncParsableCommand {
         if draft {
             baseArgs.append("--draft")
         }
+        if interactive {
+            baseArgs.append("--interactive")
+        }
 
         // Launch each ticket in a separate terminal
         for (index, ticket) in tickets.enumerated() {
@@ -207,7 +215,11 @@ struct Parallel: AsyncParsableCommand {
 
         print("")
         print("✅ All \(tickets.count) ticket(s) launched in separate terminals")
-        print("💡 Each terminal window will stay open for you to review the results")
+        if interactive {
+            print("💡 Guide Claude interactively in each terminal window")
+        } else {
+            print("💡 Each terminal window will stay open for you to review the results")
+        }
     }
 }
 

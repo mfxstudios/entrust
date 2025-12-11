@@ -173,6 +173,64 @@ Options:
 8. Updates ticket status to "In Review"
 9. Cleans up worktree
 
+### Interactive Mode (`--interactive`)
+
+**NEW!** Guide Claude through implementation interactively with real-time chat, then auto-complete with tests & PR.
+
+```bash
+entrust run <task-id> --interactive [options]
+```
+
+**Workflow:**
+1. Fetches task from JIRA/Linear
+2. Updates ticket status to "In Progress"
+3. **Starts interactive chat session** - you guide Claude conversationally
+4. Type `done` or `finish` when ready to proceed
+5. **Automated completion**: runs tests, commits, pushes, creates PR
+6. Updates ticket status to "In Review"
+
+**Example session:**
+```bash
+$ entrust run IOS-1234 --interactive
+
+🎯 Interactive Mode - IOS-1234
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 Task: Add dark mode support
+💬 Starting Interactive Session
+
+Commands:
+  • Type your messages to guide Claude
+  • Type 'done' or 'finish' to end and proceed to automation
+  • Type 'cancel' to exit without automation
+
+🤖 Claude:
+I'll help you add dark mode support. Let me start by...
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+You: Let's use a theme manager pattern instead
+
+🤖 Claude:
+Good idea! I'll refactor to use a ThemeManager...
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+You: done
+
+✅ Interactive session complete!
+
+🤖 Starting Automation Flow
+🧪 Running tests...
+✅ Tests passed
+🌿 Creating branch: feature/IOS-1234
+📬 Creating pull request...
+✅ Complete!
+```
+
+**Use cases:**
+- Complex features that need iterative refinement
+- Learning how Claude approaches problems
+- Situations requiring human judgment during implementation
+- Debugging tricky issues step-by-step
+
 ### `parallel`
 
 Process multiple tasks concurrently using isolated worktrees.
@@ -186,6 +244,7 @@ Options:
   --draft                 Create PRs as drafts
   --skip-tests            Skip running tests
   --new-terminal          Run each ticket in a separate terminal window
+  --interactive           Interactive mode (auto-enables --new-terminal)
 ```
 
 **Examples:**
@@ -202,9 +261,14 @@ entrust parallel IOS-1234 IOS-1235 --draft
 
 # Launch each ticket in its own terminal window (best for monitoring)
 entrust parallel IOS-1234 IOS-1235 IOS-1236 --new-terminal
+
+# Interactive mode for multiple tickets - guide Claude in each terminal
+entrust parallel IOS-1234 IOS-1235 --interactive
 ```
 
-**Note:** When using `--new-terminal`, each ticket runs in a dedicated terminal window instead of using worktree-based parallelization. This provides better visibility but doesn't enforce the `--max-concurrent` limit.
+**Notes:**
+- When using `--new-terminal`, each ticket runs in a dedicated terminal window instead of using worktree-based parallelization. This provides better visibility but doesn't enforce the `--max-concurrent` limit.
+- `--interactive` automatically enables `--new-terminal` and launches each ticket with interactive mode, allowing you to guide Claude separately in each terminal window.
 
 ### `feedback`
 
