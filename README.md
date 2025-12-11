@@ -20,17 +20,6 @@
 - **🔧 Session Management**: View and continue previous Claude Code sessions
 - **🔐 Secure Storage**: Credentials stored safely in macOS Keychain
 
-## 📋 Table of Contents
-
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [Commands](#commands)
-- [Configuration](#configuration)
-- [Workflows](#workflows)
-- [Development](#development)
-- [Contributing](#contributing)
-- [License](#license)
-
 ## 🚀 Installation
 
 ### Prerequisites
@@ -643,4 +632,4 @@ mint install . --force
 
 ## 📄 License
 
-MIT License - see [LICENSE](LICENSE) file for details.
+MIT License
