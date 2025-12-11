@@ -18,15 +18,16 @@
 - **⚡ Parallel Processing**: Process multiple tickets concurrently
 - **📝 Smart PR Summaries**: Auto-generates structured PR descriptions with context
 - **🔧 Session Management**: View and continue previous Claude Code sessions
-- **🔐 Secure Storage**: Credentials stored safely in macOS Keychain
+- **🔐 Project-Level Config**: Each project has its own configuration and credentials
+- **🔍 Auto-Detection**: Automatically detects GitHub org/repo from git remote
 
 ## 🚀 Installation
 
 ### Prerequisites
 
 - **macOS** 15.0+ or **Linux** (Ubuntu 20.04+, other distributions)
-  - macOS: Uses Keychain for secure credential storage
-  - Linux: Uses file-based storage in `~/.entrust/credentials/` with secure permissions
+  - macOS: Uses Keychain for secure credential storage (project-specific)
+  - Linux: Uses file-based storage in `.entrust/credentials/` with secure permissions (project-specific)
 - Swift 6.0+
 - [Claude Code](https://claude.ai/claude-code) installed (`claude --version`)
 - Git configured
@@ -77,18 +78,31 @@ entrust --help
 
 ### 1. Initial Setup
 
-Configure your task tracker and GitHub credentials:
+Navigate to your project directory and configure your task tracker and GitHub credentials:
 
 ```bash
+cd /path/to/your/project
 entrust setup
 ```
+
+**Important:** Configuration is project-specific. Run `entrust setup` in each project directory where you want to use entrust.
 
 You'll be prompted for:
 - Task tracker type (jira/linear)
 - JIRA URL and email (if using JIRA)
-- GitHub repository (e.g., `myorg/myrepo`)
+- GitHub repository (auto-detected from git remote, or enter manually)
 - Base branch (default: `main`)
-- API tokens (stored securely in Keychain)
+- API tokens (stored securely - Keychain on macOS, `.entrust/credentials/` on Linux)
+
+This creates:
+- `.env` - Project configuration file
+- `.entrust/credentials/` (Linux only) - Encrypted credential storage
+
+**Add to `.gitignore`:**
+```
+.env
+.entrust/
+```
 
 ### 2. Process a Single Task
 
@@ -136,6 +150,12 @@ entrust setup          # Interactive configuration
 entrust setup --show   # Display current settings (tokens hidden)
 entrust setup --clear  # Clear all configuration and credentials
 ```
+
+**Project-Level Configuration:**
+- Configuration is stored per-project in `.env` file in the current directory
+- Credentials are stored project-specifically (macOS Keychain uses project path hash, Linux uses `.entrust/credentials/`)
+- Each project can have different JIRA instances, GitHub repos, and settings
+- Run `entrust setup` in each project directory where you want to use entrust
 
 **Auto-detection:**
 - When run from a git repository, `setup` automatically detects the GitHub org/repo from the `origin` remote

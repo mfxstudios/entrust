@@ -75,17 +75,9 @@ struct Configuration: Codable {
 
 enum ConfigurationManager {
     static var configPath: URL {
-        // Check for .env in current directory first, then fall back to home directory
+        // Project-level configuration only - always use .env in current directory
         let currentDir = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-        let localEnv = currentDir.appendingPathComponent(".env")
-
-        if FileManager.default.fileExists(atPath: localEnv.path) {
-            return localEnv
-        }
-
-        return FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".entrust")
-            .appendingPathComponent(".env")
+        return currentDir.appendingPathComponent(".env")
     }
 
     static func save(_ config: Configuration) throws {

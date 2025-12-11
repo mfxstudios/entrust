@@ -4,12 +4,19 @@ import Security
 #endif
 
 enum KeychainKey: String {
-    case jiraToken = "com.entrust.jira-token"
-    case linearToken = "com.entrust.linear-token"
-    case githubToken = "com.entrust.github-token"
+    case jiraToken = "jira-token"
+    case linearToken = "linear-token"
+    case githubToken = "github-token"
 }
 
 enum KeychainManager {
+    /// Get project-specific key by including current directory path
+    private static func projectKey(for key: KeychainKey) -> String {
+        let projectPath = FileManager.default.currentDirectoryPath
+        let projectHash = projectPath.hashValue
+        return "com.entrust.\(projectHash).\(key.rawValue)"
+    }
+
     static func save(_ value: String, for key: KeychainKey) throws {
         #if canImport(Security)
         try saveToKeychain(value, for: key)
@@ -43,10 +50,11 @@ enum KeychainManager {
     #if canImport(Security)
     private static func saveToKeychain(_ value: String, for key: KeychainKey) throws {
         let data = value.data(using: .utf8)!
+        let projectSpecificKey = projectKey(for: key)
 
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrAccount as String: key.rawValue,
+            kSecAttrAccount as String: projectSpecificKey,
             kSecValueData as String: data,
             kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked
         ]
@@ -61,9 +69,11 @@ enum KeychainManager {
     }
 
     private static func loadFromKeychain(_ key: KeychainKey) throws -> String {
+        let projectSpecificKey = projectKey(for: key)
+
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrAccount as String: key.rawValue,
+            kSecAttrAccount as String: projectSpecificKey,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
@@ -81,9 +91,11 @@ enum KeychainManager {
     }
 
     private static func deleteFromKeychain(_ key: KeychainKey) throws {
+        let projectSpecificKey = projectKey(for: key)
+
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrAccount as String: key.rawValue
+            kSecAttrAccount as String: projectSpecificKey
         ]
 
         let status = SecItemDelete(query as CFDictionary)
@@ -97,8 +109,9 @@ enum KeychainManager {
     // MARK: - Linux File-based Implementation
 
     private static var credentialsDirectory: URL {
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        let dir = home.appendingPathComponent(".entrust/credentials")
+        // Store credentials in current project directory under .entrust/credentials
+        let currentDir = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let dir = currentDir.appendingPathComponent(".entrust/credentials")
 
         // Create directory if it doesn't exist
         try? FileManager.default.createDirectory(
