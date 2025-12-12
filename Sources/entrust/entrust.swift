@@ -6,7 +6,7 @@ struct Entrust: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "entrust",
         abstract: "Automate iOS development from JIRA/Linear to PR using Claude Code",
-        version: "0.1.0",
+        version: "0.1.4",
         subcommands: [
             Setup.self,
             Run.self,

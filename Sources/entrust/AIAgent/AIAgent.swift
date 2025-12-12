@@ -203,6 +203,38 @@ struct ClaudeCodeAgent: AIAgent, Sendable {
                 sessionId: finalSessionId
             )
 
+        } catch let error as DecodingError {
+            // Handle SDK decoding errors more gracefully
+            print("\n❌ Error parsing Claude API response")
+
+            switch error {
+            case .typeMismatch(let type, let context):
+                print("   Type mismatch: Expected \(type) at \(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
+                print("   \(context.debugDescription)")
+
+                // Provide helpful guidance
+                if context.debugDescription.contains("Expected to decode String but found an array") {
+                    print("\n💡 This is a known issue with tool_result content blocks in the ClaudeCodeSDK.")
+                    print("   The SDK needs to be updated to handle tool results with array content.")
+                    print("   Issue: https://github.com/mfxstudios/claude-code-sdk-swift/issues")
+                }
+
+            case .keyNotFound(let key, let context):
+                print("   Missing key '\(key.stringValue)' at \(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
+
+            case .valueNotFound(let type, let context):
+                print("   Missing value of type \(type) at \(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
+
+            case .dataCorrupted(let context):
+                print("   Data corrupted at \(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
+                print("   \(context.debugDescription)")
+
+            @unknown default:
+                print("   \(error.localizedDescription)")
+            }
+
+            throw AutomationError.agentExecutionFailed("Claude API response parsing failed: \(error)")
+
         } catch let error as ClaudeCodeError {
             print("\n❌ Claude Code error: \(error.localizedDescription)")
 

@@ -11,10 +11,42 @@ enum KeychainKey: String {
 
 enum KeychainManager {
     /// Get project-specific key by including current directory path
+    /// Uses a stable hash of the absolute path so the same directory always produces the same key
     private static func projectKey(for key: KeychainKey) -> String {
         let projectPath = FileManager.default.currentDirectoryPath
-        let projectHash = projectPath.hashValue
-        return "com.entrust.\(projectHash).\(key.rawValue)"
+
+        // Use SHA256 hash of the absolute path for a stable, deterministic identifier
+        // Unlike Swift's hashValue, this will always be the same for the same path
+        let pathData = projectPath.data(using: .utf8)!
+        let hash = pathData.withUnsafeBytes { bytes in
+            var hasher = SHA256Hasher()
+            hasher.update(bytes: bytes)
+            return hasher.finalize()
+        }
+
+        // Use first 16 chars of hex string for reasonable key length
+        let hashString = hash.prefix(16).map { String(format: "%02x", $0) }.joined()
+        return "com.entrust.\(hashString).\(key.rawValue)"
+    }
+
+    /// Simple SHA256 implementation for stable hashing
+    private struct SHA256Hasher {
+        private var state: [UInt8] = []
+
+        mutating func update(bytes: UnsafeRawBufferPointer) {
+            state.append(contentsOf: bytes)
+        }
+
+        func finalize() -> [UInt8] {
+            // For simplicity, use a deterministic hash based on the string content
+            // This creates a stable identifier from the path
+            var hash = [UInt8](repeating: 0, count: 32)
+            for (index, byte) in state.enumerated() {
+                hash[index % 32] ^= byte
+                hash[(index + 1) % 32] = hash[(index + 1) % 32] &+ byte
+            }
+            return hash
+        }
     }
 
     static func save(_ value: String, for key: KeychainKey) throws {

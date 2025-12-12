@@ -18,6 +18,7 @@ enum AutomationError: LocalizedError, Equatable {
     case statusChangeFailed
     case invalidStatus(String, available: [String])
     case noTicketsProvided
+    case agentExecutionFailed(String)
 
     // Reminders-specific errors
     case remindersAccessDenied
@@ -68,6 +69,8 @@ enum AutomationError: LocalizedError, Equatable {
             return "Invalid status '\(status)'. Available: \(available.joined(separator: ", "))"
         case .noTicketsProvided:
             return "No tickets provided. Use arguments or --file option."
+        case .agentExecutionFailed(let message):
+            return "AI agent execution failed: \(message)"
         case .remindersAccessDenied:
             return "Access to Reminders denied. Please grant access in System Settings > Privacy & Security > Reminders."
         case .remindersListNotFound(let name):

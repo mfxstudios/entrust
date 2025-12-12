@@ -18,6 +18,11 @@ final class KeychainManagerTests {
 
         // Change to test directory
         FileManager.default.changeCurrentDirectoryPath(testDirectory.path)
+
+        // Clean up any existing credentials from previous test runs
+        try? KeychainManager.delete(.jiraToken)
+        try? KeychainManager.delete(.linearToken)
+        try? KeychainManager.delete(.githubToken)
     }
 
     deinit {
